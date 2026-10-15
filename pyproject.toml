@@ -1,17 +1,21 @@
 [project]
 name = "lean1"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.2.0"
+description = "Supervise a Codex research agent, verify its Lean proofs, and email the result"
 readme = "README.md"
 authors = [
     { name = "vimohr", email = "vinicius.mohr1618@gmail.com" }
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 dependencies = []
 
 [project.scripts]
-lean1 = "lean1:main"
+lean1 = "lean1.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.13.0,<0.14.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+source-include = ["prompt.txt", "runner.py", "tests/**", ".python-version"]
+source-exclude = ["workspace", "controlled-clifford-hierarchy", "lean1-runs", "codex_runs.log", "codex_last_output.json", "codex_last_message.md"]

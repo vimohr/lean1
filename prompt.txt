@@ -1,0 +1,488 @@
+You have already established substantial complexity results for the **supplied-target** problem: for succinct Boolean phase targets, determining the controlled hierarchy level is NP-hard/NP-complete in appropriate formulations, while several restricted cases admit efficient algorithms.
+
+You also established an important negative observation: this hardness does **not** automatically transfer to
+
+\[
+L(n,k,m)
+=
+\max\{\ell_{n+1}(CU):
+U\in\mathcal C_k(n),\,
+m(U)=m,\,
+CU\in\mathcal C_\infty(n+1)\}.
+\]
+
+In particular, your SAT construction lies on the \(m=1\) slice, but the surrounding extremal function is explicitly
+
+\[
+L(n,k,1)=k+1,
+\]
+
+so maximization over all admissible targets erases the encoded SAT instance.
+
+Your next task is to focus specifically on the computational complexity of the **extremal function \(L(n,k,m)\) itself**.
+
+Do not use hardness of evaluating a supplied target as the final answer. That problem is now understood sufficiently for the purposes of this project.
+
+The objective is to determine which of the following pictures is closer to the truth:
+
+\[
+\boxed{\text{\(L(n,k,m)\) has an efficient structural algorithm}}
+\]
+
+or
+
+\[
+\boxed{\text{computing \(L(n,k,m)\) itself has genuine computational hardness.}}
+\]
+
+Try seriously to prove one of these.
+
+## 1. Fix the precise computational questions
+
+Study primarily
+
+\[
+\textsc{EXACT-L}:(n,k,m)\longmapsto L(n,k,m)
+\]
+
+and the threshold problem
+
+\[
+\textsc{L-Threshold}
+=
+\{(n,k,m,t):L(n,k,m)\ge t\}.
+\]
+
+Keep binary and unary encodings separate.
+
+For binary encoding, input length is approximately
+
+\[
+\log n+\log k+\log m+\log t.
+\]
+
+For numerical/unary complexity, polynomial time in \(n,k,m,t\) is a different notion.
+
+State every algorithmic or hardness theorem with the encoding made explicit.
+
+The central practical question is also worth treating separately:
+
+> For fixed \(k,m\), can \(L(n,k,m)\) be computed in time polynomial in \(n\)?
+
+This is meaningful even if binary EXACT-L behaves differently.
+
+## 2. Do not attempt to transfer the previous SAT reduction mechanically
+
+You already know why the straightforward reduction fails:
+
+\[
+U_x\text{ encodes }x
+\]
+
+does not imply
+
+\[
+L(n_x,k_x,m_x)\text{ encodes }x,
+\]
+
+because \(L\) maximizes over **all** admissible targets with those parameters. Another target may attain the same or a larger value independently of \(x\).
+
+Treat this as the central obstacle.
+
+A successful hardness proof for \(L\) must encode information into the **parameter triple itself**, or prove that the extremal structure associated with those parameters is forced to reflect the encoded instance.
+
+Do not present another supplied-target reduction as hardness of \(L\).
+
+## 3. First investigate whether hardness is even plausible
+
+The input to \(L\) consists of only three integers.
+
+This makes \(L\) very different from ordinary circuit problems: there is no arbitrary graph, Boolean formula, group presentation, or circuit directly supplied as input.
+
+Ask whether the function may therefore possess strong uniform structure.
+
+Investigate whether \(L\) might ultimately admit:
+
+- a closed form;
+- a recurrence;
+- finitely many parameter regimes;
+- a simple extremal construction;
+- a dynamic program;
+- a reduction to a small collection of algebraic invariants;
+- an efficiently computable group-theoretic extremum.
+
+The previous easy slices are important evidence:
+
+\[
+L(n,k,0),\qquad L(n,2,m),\qquad L(n,k,1)
+\]
+
+already have simple formulas.
+
+Try to determine whether these are isolated coincidences or manifestations of a more general structural theorem.
+
+## 4. Search for more exact slices
+
+Before attempting generic hardness, compute or prove additional exact cases.
+
+Prioritize:
+
+\[
+m=2,\qquad m=3,
+\]
+
+small fixed \(k\), and especially the first parameter regime where the known unbounded-in-\(n\) phenomenon occurs.
+
+Try to determine exact or asymptotically tight formulas such as
+
+\[
+L(n,k,2),
+\]
+
+\[
+L(n,k,3),
+\]
+
+or
+
+\[
+L(n,k,m)
+\]
+
+for fixed small \(k,m\).
+
+If an exact formula is inaccessible, obtain matching upper and lower bounds.
+
+A pattern across these slices may reveal an efficient general algorithm.
+
+## 5. Try to characterize extremizers
+
+The crucial difference between supplied-target evaluation and computing \(L\) is that for \(L\) we do not care about arbitrary targets—we care only about the **worst possible target**.
+
+Exploit this aggressively.
+
+Ask:
+
+> What structural properties can an extremal \(U\) attaining \(L(n,k,m)\) be assumed to have?
+
+Try to prove reductions to restricted families such as:
+
+- permutation gates;
+- monomial gates;
+- diagonal gates;
+- selector-controlled permutations;
+- finite \(2\)-group constructions;
+- affine constructions;
+- gates with bounded numbers of selectors;
+- normal forms derived from hierarchy descent.
+
+If every maximum has a witness in a succinctly parameterized family, computing \(L\) could be dramatically easier than evaluating arbitrary supplied targets.
+
+Conversely, if extremizers require increasingly complicated combinatorial objects, identify exactly what optimization problem they encode.
+
+## 6. Reinterpret \(L\) as an extremal classical problem
+
+Try to eliminate quantum-matrix language as much as possible.
+
+Search for an equivalent formulation in terms of:
+
+- finite \(2\)-groups;
+- nilpotency class;
+- lower central series;
+- iterated commutators;
+- permutation groups;
+- Boolean derivatives;
+- affine groups;
+- phase polynomials;
+- symplectic actions;
+- longest paths in a constrained descent graph.
+
+The ideal result would be something like
+
+\[
+L(n,k,m)=c+\max_{G\in\mathcal G(n,k,m)}\operatorname{class}(G)
+\]
+
+or an analogous extremal combinatorial quantity.
+
+If such a characterization can be proved, study the classical extremal problem directly.
+
+Determine whether it has known asymptotics or algorithms.
+
+## 7. Investigate whether the maximization actually makes the problem easier
+
+The previous work discovered an important phenomenon:
+
+> Evaluating a particular target can be NP-hard while computing the maximum over all targets in the same parameter slice can be trivial.
+
+Explore whether this is a general principle.
+
+Perhaps the extremal target is always some highly structured universal construction depending only on \(n,k,m\).
+
+Try to prove a theorem of the form:
+
+> For every \(n,k,m\), \(L(n,k,m)\) is attained by a target from an explicitly constructible canonical family.
+
+Even a weaker statement restricting extremizers to a manageable class would be valuable.
+
+If such a theorem holds, derive an algorithm from it.
+
+## 8. Attempt an efficient algorithm directly
+
+Use every structural result from the previous research phases.
+
+Try to construct an algorithm computing \(L(n,k,m)\) without enumerating all hierarchy gates.
+
+Desired targets include:
+
+\[
+\operatorname{poly}(n,k,m)
+\]
+
+time,
+
+or, more realistically,
+
+\[
+f(k,m)\operatorname{poly}(n).
+\]
+
+If exact computation appears harder, investigate algorithms producing asymptotically tight upper and lower bounds.
+
+Determine whether the improved mathematical upper bounds obtained in the previous phase can be turned into dynamic programming or finite-state computation.
+
+In particular, ask whether the entire hierarchy-lowering behavior relevant to fixed \(k,m\) can be compressed into
+
+\[
+f(k,m)\operatorname{poly}(n)
+\]
+
+states or invariants.
+
+This was previously identified as a central unresolved question. Attack it directly.
+
+## 9. If an efficient algorithm fails, identify the obstruction precisely
+
+Do not conclude "probably hard" from an exponential search space.
+
+Find a concrete mathematical subproblem that appears necessary for computing \(L\).
+
+Examples might include maximizing:
+
+- nilpotency class of a constrained \(2\)-group;
+- order of a commutator subject to bounded-order generators;
+- depth of a permutation-group commutator chain;
+- degree of a constrained Boolean derivative system;
+- height of a succinctly represented descent graph.
+
+Then investigate the computational complexity of **that extremal problem**.
+
+If it is known hard, prove that computing \(L\) solves it.
+
+If it is not known hard, you may have isolated a new classical complexity problem; analyze it independently.
+
+## 10. Explore genuine parameter-encoding hardness
+
+A standard SAT reduction cannot simply place a formula into \(U\), because \(U\) is not part of the input to \(L\).
+
+For binary EXACT-L, however, the integers \(n,k,m\) themselves can contain many bits.
+
+Investigate whether their binary representations can encode computational instances in a mathematically meaningful way.
+
+Do not merely hide arbitrary data in unused bits. The value \(L(n,k,m)\) must actually depend on the encoded structure.
+
+Potential mechanisms worth investigating include:
+
+- arithmetic properties of \(n,k,m\);
+- prime factorizations;
+- divisibility;
+- orders modulo integers;
+- finite-group constructions whose extremal behavior depends on arithmetic parameters;
+- succinct constructions indexed by binary integers.
+
+If a reduction of the form
+
+\[
+x\mapsto(n_x,k_x,m_x,t_x)
+\]
+
+is possible with
+
+\[
+x\in A
+\iff
+L(n_x,k_x,m_x)\ge t_x,
+\]
+
+prove it rigorously and verify that the mapping is polynomial-time in the binary input length.
+
+Be skeptical: because \(L\) is such a symmetric extremal quantity, this kind of encoding may be impossible or unnatural.
+
+## 11. Treat unary sparsity correctly
+
+You have already observed that the all-unary threshold language is sparse.
+
+Do not attempt to prove ordinary polynomial many-one NP-hardness for that encoding unless you are explicitly deriving consequences such as \(P=NP\).
+
+Instead, investigate more appropriate notions if needed:
+
+- parameterized hardness;
+- Turing reductions;
+- conditional lower bounds;
+- query lower bounds;
+- hardness of computing exact values rather than language membership.
+
+But prioritize mathematically natural results over complexity-theoretic technicalities.
+
+## 12. Investigate asymptotic computation as an intermediate target
+
+If exact computation remains elusive, determine the growth rate of
+
+\[
+L(n,k,m)
+\]
+
+for fixed \(k,m\).
+
+For example, determine whether for some fixed pair
+
+\[
+L(n,k,m)=\Theta(\log n),
+\]
+
+\[
+\Theta(n^\alpha),
+\]
+
+\[
+\Theta(n),
+\]
+
+or something else.
+
+An asymptotically tight characterization may immediately yield an efficient approximation algorithm and reveal whether exact computation is likely to contain substantial arithmetic complexity.
+
+Pay particular attention to the parameter pair associated with the existing unbounded family.
+
+Improve both its lower bound and the general upper bound until the gap is as small as possible.
+
+## 13. Use computation as a theorem-discovery tool
+
+Compute exact values or rigorous bounds for as many small triples
+
+\[
+(n,k,m)
+\]
+
+as feasible.
+
+Build a table of values.
+
+Search for:
+
+- recurrences in \(n\);
+- monotonicity;
+- stabilization;
+- dependence only on simple combinations of parameters;
+- exceptional small cases;
+- correspondence with known extremal group quantities.
+
+If possible, independently enumerate restricted extremizers for small systems and identify their structure.
+
+Use these experiments to formulate concrete conjectures, then attempt proofs.
+
+Do not present empirical patterns as established results.
+
+## 14. Actively try to falsify simple conjectures
+
+If the data suggests a formula such as
+
+\[
+L(n,k,m)=F(n,k,m),
+\]
+
+try hard to break it before attempting a general proof.
+
+Search computationally and theoretically for counterexamples.
+
+Likewise, if you conjecture
+
+\[
+L(n,k,m)\le\operatorname{poly}(n)
+\]
+
+for fixed \(k,m\), try to construct families growing faster.
+
+The goal is not to defend a preferred hypothesis but to discover the correct one.
+
+## 15. Desired outcomes
+
+The strongest outcome would be one of:
+
+### A. Efficient computation
+
+A theorem such as
+
+\[
+L(n,k,m)
+\text{ is computable in }
+f(k,m)\operatorname{poly}(n)
+\text{ time}.
+\]
+
+Give an explicit algorithm, correctness proof, and runtime analysis.
+
+### B. Exact structural characterization
+
+A theorem expressing \(L(n,k,m)\) through a simpler extremal invariant that is itself efficiently computable or mathematically understood.
+
+### C. Genuine hardness of \(L\)
+
+A polynomial-time reduction proving hardness of
+
+\[
+\textsc{L-Threshold}
+\]
+
+or exact computation under a clearly specified encoding.
+
+The reduction must concern the extremal function itself, not merely a supplied target.
+
+### D. Asymptotically tight solution
+
+For important fixed \(k,m\), prove
+
+\[
+L(n,k,m)=\Theta(F(n))
+\]
+
+or ideally determine the exact value.
+
+### E. Barrier theorem
+
+If neither an efficient algorithm nor hardness proof succeeds, prove something substantive explaining why a major class of algorithms or reductions cannot work.
+
+The previous observation that supplied-target SAT hardness disappears under maximization is an example of such a barrier; seek stronger ones.
+
+## 16. Deliverable
+
+Produce a research report containing:
+
+1. All newly determined exact values or parameter slices of \(L(n,k,m)\).
+2. The strongest structural characterization of extremal targets you can prove.
+3. The best algorithm for computing \(L\), with rigorous complexity analysis.
+4. The strongest hardness result that genuinely applies to \(L\) itself.
+5. Improved asymptotic upper and lower bounds for fixed \(k,m\).
+6. Computational experiments and resulting conjectures.
+7. Failed hardness reductions, with precise explanations of why maximization destroys the encoding.
+8. Failed algorithmic approaches and the mathematical obstruction encountered.
+9. A strict distinction between proved theorems, conditional results, computational evidence, and conjectures.
+10. The strongest unresolved intermediate lemma whose proof would settle or substantially advance the complexity question.
+
+Most importantly:
+
+**Do not return to hardness of evaluating a supplied target as the main result. The central object of this phase is the extremal function \(L(n,k,m)\) itself.**
+
+Try to determine whether the maximization that defines \(L\) destroys computational hardness because extremizers have universal structure, or whether sufficiently rich information survives in the parameters to make computing the maximum genuinely hard.
+
+Either conclusion would be a significant result.

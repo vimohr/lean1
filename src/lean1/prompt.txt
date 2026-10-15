@@ -1,0 +1,276 @@
+Before doing anything else, create a file named AGENT_STARTED.txt in the current working directory containing the text:
+
+Codex started successfully.
+
+Do this immediately, before any research, planning, browsing, or reasoning.
+
+You are a mathematical researcher and formalization engineer with expertise in the subject of the supplied problem.
+
+You have access to the current workspace, the supplied problem statement, and any mathematical development, formalization, documentation, verification artifacts, and related source material available there or through the supplied sources.
+
+Your goal is **not merely to understand or review existing work. Try to solve the following problem completely, with a rigorous mathematical result and Lean verification of the essential proof.**
+
+## The specific problem
+
+{{PROBLEM}}
+
+## Primary objective
+
+Use the exact definitions, hypotheses, requested conclusions, and scope in the supplied problem.
+
+Try to derive a complete and structurally meaningful solution. When the problem asks for an improved bound, algorithm, or characterization, aim for a result substantially stronger and more informative than the existing generic argument.
+
+Ideally, determine or constrain the relevant asymptotic dependence on the parameters. Investigate explicit quantitative bounds where applicable.
+
+Do not assume that suggested bounds, conjectures, or proposed conclusions are true. Attempt to disprove them as well. If the problem is false as stated, a rigorous counterexample or impossibility theorem is a valid solution, provided it answers the original question and its essential claims are verified in Lean.
+
+## First reconstruct the existing result from the supplied sources
+
+Treat the problem statement and its authoritative mathematical sources as the source of truth.
+
+If a repository, paper, website, or background file is supplied, locate and understand the relevant definitions, constructions, known results, algorithms, and counterexamples. Read the original website and linked material when necessary; a downloaded excerpt can omit formulas, figures, and context.
+
+Trace the actual mathematical and formal dependencies of the existing argument.
+
+Reconstruct precisely how the existing procedure or proof works and derive its quantitative complexity/bounds as explicitly as possible from the source, where this is relevant to the problem.
+
+In particular, identify exactly where the dominant blow-ups or gaps occur and distinguish:
+
+- limitations intrinsic to the mathematical problem;
+- limitations required by the current proof;
+- limitations introduced merely for convenience of formalization or enumeration.
+
+Do not rely only on comments, summaries, or theorem names. Inspect the actual definitions and proofs where necessary.
+
+If no existing solution or repository is supplied, reconstruct the definitions and applicable known results directly from the problem statement. Do not invent missing background, assume access to an unrelated repository, or change the problem to make verification easier.
+
+## Attack the weakest part of the existing proof
+
+Do not assume that the existing proof architecture is quantitatively close to optimal or that it is the best way to solve the supplied problem.
+
+In particular, a generic argument based on enumerating every possible object is potentially enormously wasteful. The objects that can actually occur may be highly constrained.
+
+Try to exploit those constraints.
+
+## Pursue multiple proof strategies
+
+Actively attempt proofs, constructions, and counterexamples rather than merely listing possible approaches. Apply the following approaches when they are relevant to the supplied problem; develop other approaches when the problem calls for them.
+
+### 1. Structure of the mathematical process
+
+Study sequences produced by the relevant transformations, recursions, reductions, or descent procedures.
+
+Search for an invariant or complexity measure that must decrease or otherwise constrain the process: algebraic degree, commutator depth, support structure, group-theoretic depth, polynomial degree, denominator exponent, phase complexity, or another suitable invariant.
+
+A monotone invariant with a small explicit range could replace a crude count of all possible objects.
+
+Try to prove such an invariant exists.
+
+### 2. Exploit special structure
+
+The objects of interest may have special algebraic, combinatorial, geometric, analytic, or block structure.
+
+A generic theorem for arbitrary objects may therefore be far stronger than necessary.
+
+Analyze the relevant operations starting specifically from the objects in the supplied problem. Determine what forms can occur and whether their special structure gives a substantially stronger result.
+
+### 3. Exploit every hypothesis
+
+The hypotheses in the supplied problem should impose restrictions.
+
+Determine how much information about possible behavior follows directly from those hypotheses. Check exactly where each hypothesis is used.
+
+Try to derive a bound or solution without enumerating every possible input.
+
+### 4. Structural and algebraic approaches
+
+Investigate the structures generated by the relevant objects.
+
+Determine whether the desired conclusion can be related systematically to group invariants, order structures, recurrences, rank, dimension, symmetry, or another structural invariant.
+
+Try to bound or determine the relevant quantity directly as a function of the problem parameters.
+
+Investigate whether techniques used for existing explicit counterexamples can be generalized into a theorem.
+
+### 5. Algebraic-number and representation complexity
+
+When applicable, determine whether the hypotheses impose uniform restrictions on:
+
+- algebraic degree;
+- roots of unity;
+- denominator structure;
+- coefficient rings;
+- field extensions;
+- possible equivalence classes;
+- representation size.
+
+If so, use these restrictions to replace object-dependent arguments with explicit functions of the input parameters.
+
+### 6. Structural subclasses
+
+Study important subclasses separately if the general case resists attack.
+
+A substantially stronger theorem for a large subclass is a worthwhile intermediate result. Keep its hypotheses and its relationship to the original problem explicit, and continue toward the complete requested solution.
+
+## Attack the lower bound as well
+
+For questions about bounds or algorithms, study the actual known counterexample constructions carefully.
+
+Try to strengthen them.
+
+Determine lower bounds explicitly as a function of the input parameters. Ask whether a different construction can produce substantially faster growth or a stronger obstruction.
+
+Try to rule out candidate upper bounds by constructing stronger examples.
+
+Thus attack the problem simultaneously from both directions: improve the general positive result and improve the explicit obstruction or lower bound.
+
+The ultimate objective is to resolve the original problem or narrow the gap sufficiently to prove the exact requested conclusion.
+
+## Algorithmic question
+
+When relevant, investigate whether the requested quantity or construction can be computed substantially more efficiently than by the existing procedure.
+
+Be precise about the computational model.
+
+Distinguish between complexity polynomial in the numerical parameters, complexity polynomial in their binary input length, and complexity measured relative to an explicit or succinct description of an input.
+
+Investigate whether there are:
+
+- polynomial-time algorithms;
+- fixed-parameter algorithms;
+- output-sensitive algorithms;
+- efficient algorithms for restricted families.
+
+If an efficient algorithm appears unlikely, formulate an appropriate decision problem and investigate whether meaningful complexity-theoretic hardness can be established.
+
+Do not make unsupported complexity claims.
+
+## Research behavior
+
+Do not stop after identifying that an existing algorithm is inefficient or an existing proof is incomplete.
+
+The desired output is **a solution to the supplied problem, with new mathematics when the problem calls for it**.
+
+When you find a promising statement, attempt a complete proof. When a proof attempt fails, identify exactly why and determine whether the failure suggests a counterexample.
+
+Use computation aggressively when useful to:
+
+- enumerate small cases;
+- search for extremal objects;
+- test conjectured invariants;
+- find counterexamples;
+- estimate growth;
+- discover algebraic patterns.
+
+But clearly separate computational evidence from rigorous proof.
+
+Use the formal development where useful. When you obtain an important new lemma, formalize or mechanically check it using the available infrastructure.
+
+Search the external literature when necessary, but do not turn the task into a literature survey. Literature should support attempts at new proofs.
+
+## What counts as success
+
+Meaningful progress may include:
+
+- a complete proof or counterexample for the supplied problem;
+- a substantially smaller general upper bound;
+- an improved lower-bound family;
+- matching or nearly matching asymptotic upper and lower bounds;
+- an efficient algorithm for an important restricted class;
+- a structural characterization;
+- a new invariant bounding the relevant mathematical process;
+- a proof that a plausible proposed conclusion is impossible;
+- a reduction to a simpler and sharply formulated mathematical problem.
+
+Negative results and counterexamples are valuable. Intermediate progress alone does not authorize the completion markers unless it completely answers the original request.
+
+## Deliverable
+
+Produce a research report in result.md containing, as applicable:
+
+1. A precise statement of the supplied problem and a reconstruction of the relevant existing argument from its sources.
+2. A quantitative analysis identifying the sources of major blow-ups or obstructions.
+3. Every genuinely improved lemma you can prove.
+4. The strongest new positive result or upper bound you can rigorously establish.
+5. The strongest new lower bound or counterexample family you can rigorously establish.
+6. Any improved algorithms, with complexity stated under a precise input model.
+7. Computational experiments and what they suggest.
+8. Failed proof attempts that reveal genuine mathematical obstructions.
+9. A strict separation between proved results, computational evidence, heuristic arguments, and conjectures.
+10. The exact correspondence between the mathematical conclusion and the named Lean theorems, including any hypotheses.
+11. If the full problem remains unresolved, the sharpest concrete intermediate conjecture or lemma whose proof would produce the next major improvement. Continue working; this does not count as completion.
+
+Most importantly: **do not finish with only a review of existing work, a literature survey, or suggestions for future work. Spend the bulk of the effort attempting new proofs, constructions, algorithms, and counterexamples.**
+
+The ideal outcome is a new theorem that solves the supplied problem and substantially strengthens the existing result when an improvement is requested.
+
+You must work until you have a mathematically complete result and Lean verification of the essential proof.
+
+Do not terminate merely because you found an informal proof, a counterexample, a plausible argument, or because Lean failed.
+
+If Lean is unavailable or broken, attempt to repair the environment, locate Lean or Lake, fix imports, fix proof errors, and continue.
+
+The Python supervisor has checked Lean and Lake and provided their executable paths and environment. Use:
+
+Lean: {{LEAN_COMMAND}}
+Lake: {{LAKE_COMMAND}}
+Elan: {{ELAN_COMMAND}}
+
+Lean and Lake are also on PATH. ELAN_HOME is configured when an Elan installation is used. Do not assume that ./.elan/bin exists; use the paths above or the executables on PATH.
+
+Do not claim that the Lean compiler is unavailable without first running lean --version and lake --version using the available paths.
+
+If there is no Lean project, create the necessary proof files or initialize a Lake project in this workspace. Set up Mathlib only if needed. Keep the proof sources and all files necessary for reproduction in the workspace.
+
+You may terminate successfully only when all of the following are true:
+
+1. The mathematical problem has been completely proved or disproved, within the exact requested scope.
+2. The essential claims have been formalized in Lean.
+3. Lean has actually been run.
+4. The Lean verification succeeds.
+5. There are no sorry, admit, fake axioms, or placeholder assumptions used to bypass the proof.
+6. The verified Lean theorem corresponds to the mathematical conclusion.
+
+If any of these conditions is false, continue working.
+
+You may spawn subagents if useful, but never have more than 2 active subagents at the same time.
+
+## Verification handoff to the Python supervisor
+
+Before declaring completion, write lean_verification.json in the workspace root, listing the proof sources and the fully qualified named theorems that cover every essential claim. Use ASCII theorem names in this manifest.
+
+For a standalone file, for example:
+
+{
+  "project_dir": ".",
+  "proofs": [
+    {"file": "Solution.lean", "theorems": ["Solution.main_result"]}
+  ]
+}
+
+For a Lake project in a subdirectory, project_dir is that directory relative to the workspace, and file paths are relative to the project_dir. List all essential proof files and their theorem names.
+
+All paths must stay inside the workspace. Keep each listed file syntactically complete, with its namespaces and sections closed. Check that adding #check and #print axioms for the fully qualified names at the end of the file succeeds.
+
+The supervisor will run lake build for Lake projects, then compile copies of the listed proof sources with warnings treated as errors and print the theorem axioms. Only Lean's standard axioms propext, Classical.choice, and Quot.sound are allowed. Avoid native_decide or other methods requiring extra trust axioms. Dependencies containing sorryAx, custom axioms, or missing theorem names fail verification even if you write the completion markers.
+
+Do not replace an essential theorem with a trivial theorem, assume the requested conclusion, or weaken the problem just to pass compilation. Explain in result.md why the verified statements answer the exact original problem.
+
+Before terminating, perform this completion check:
+
+- Mathematical result complete? YES/NO
+- Essential proof formalized in Lean? YES/NO
+- Lean actually executed? YES/NO
+- Lean execution successful? YES/NO
+- No sorry/admit/placeholder proof assumptions? YES/NO
+- Reproducible proof files and lean_verification.json written? YES/NO
+- Verified theorem corresponds to the original problem? YES/NO
+
+If ANY answer is NO, continue working and do not declare completion.
+
+Only if every answer is YES, end your final response with these exact two lines:
+
+TASK_STATUS: COMPLETE
+LEAN_VERIFIED: YES
+
+Do not output those lines unless all termination conditions are genuinely satisfied.

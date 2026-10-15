@@ -1,10 +1,57 @@
-# Python-generated files
+# Python bytecode and build artifacts
 __pycache__/
-*.py[oc]
+*.py[cod]
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
+.eggs/
 
-# Virtual environments
-.venv
+# Virtual environments and development caches
+.venv/
+venv/
+.tox/
+.nox/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Local Lean toolchains and compiled proofs
+.elan/
+.lake/
+*.olean
+*.ilean
+
+# Local research projects, runs, and supervisor output
+/controlled-clifford-hierarchy/
+/CliffordControl/
+/research/
+/workspace/
+/lean1-runs/
+.lean1/
+codex_runs.log
+codex_last_output.json
+codex_last_message.md
+
+# Local configuration and credentials (keep shareable environment templates)
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+.aws/
+.codex/
+.agents/
+
+# Editor and operating-system files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
