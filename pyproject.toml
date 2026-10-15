@@ -1,13 +1,20 @@
 [project]
 name = "lean1"
 version = "0.2.0"
-description = "Supervise a Codex research agent, verify its Lean proofs, and email the result"
+description = "Supervise Codex research attempts with Lean proof checks and email notifications"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "vimohr", email = "vinicius.mohr1618@gmail.com" }
 ]
 requires-python = ">=3.11"
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/vimohr/lean1"
+Repository = "https://github.com/vimohr/lean1"
+Issues = "https://github.com/vimohr/lean1/issues"
 
 [project.scripts]
 lean1 = "lean1.cli:main"
@@ -17,5 +24,5 @@ requires = ["uv_build>=0.13.0,<0.14.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-source-include = ["prompt.txt", "runner.py", "tests/**", ".python-version"]
+source-include = ["prompt.txt", "runner.py", "tests/**", "CONTRIBUTING.md", "docs/**", ".python-version"]
 source-exclude = ["workspace", "controlled-clifford-hierarchy", "lean1-runs", "codex_runs.log", "codex_last_output.json", "codex_last_message.md"]

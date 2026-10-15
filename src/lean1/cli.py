@@ -1,4 +1,4 @@
-"""The lean1 console command and permission-aware setup command."""
+"""Command-line interface for research runs and local Lean setup."""
 
 import argparse
 import math

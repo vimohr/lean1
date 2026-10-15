@@ -1,132 +1,164 @@
 # lean1
 
-An installable version of `runner.py`: give it a mathematical problem and an email address, and it supervises a Codex agent until the solution passes Lean verification. It preserves the original restart loop, research instructions, completion markers, saved output, and email notifications.
+Run a Codex agent on a mathematical problem, retry incomplete attempts, and check the resulting Lean proofs before accepting completion.
+
+lean1 accepts problem statements as text, URLs, or files. Each run uses a persistent workspace containing the research report, proof sources, and logs. Email notifications report progress and verified completion.
+
+[Configuration](docs/configuration.md) · [Proof verification](docs/verification.md) · [Contributing](CONTRIBUTING.md)
+
+## Requirements
+
+- **Python 3.11 or newer** and [uv](https://docs.astral.sh/uv/getting-started/installation/).
+- **Git** for installation from this repository.
+- An installed and authenticated **[Codex CLI](https://learn.chatgpt.com/docs/codex/cli)**.
+- A working **SMTP service** or a configured local **`mail` command** for notifications.
+- **Lean 4 and Lake**. `lean1 setup` can install them locally on Linux and macOS; automatic installation requires `sh` and `curl`. On Windows, prepare an Elan installation manually and select it with `--lean-home`.
+
+lean1 uses the Python standard library and has no third-party Python runtime dependencies. Codex, Lean, and email delivery are configured separately.
 
 ## Install
 
-Requires Python 3.11 or newer, [uv](https://docs.astral.sh/uv/guides/tools/), and an installed, authenticated [Codex CLI](https://learn.chatgpt.com/docs/non-interactive-mode). The runner uses your existing Codex authentication and model configuration.
+Install directly from GitHub:
 
 ```sh
-uv tool install .
+uv tool install git+https://github.com/vimohr/lean1.git
 lean1 --help
+```
+
+Or install from a local checkout:
+
+```sh
+git clone https://github.com/vimohr/lean1.git
+cd lean1
+uv tool install .
+```
+
+If the `lean1` command is unavailable after installation, run `uv tool update-shell` and restart the shell. See the [uv tools guide](https://docs.astral.sh/uv/guides/tools/) for details.
+
+## Quick start
+
+Authenticate Codex with `codex login` and [configure email delivery](#email-notifications). Then check or install Lean and submit a problem:
+
+```sh
 lean1 setup
+lean1 \
+  --email researcher@example.com \
+  --problem-text "Prove that the sum of two even natural numbers is even." \
+  --max-runs 3 \
+  --notify complete
 ```
 
-From another directory, use `uv tool install /path/to/this/repo`. Once the repository is hosted, `uv tool install git+https://github.com/YOUR_USER/YOUR_REPO.git` works too. For editable development, use `uv tool install --editable .`.
+`lean1 setup` checks local Lean and Lake binaries and asks before downloading missing tools. The default installation location is `./.elan` in the launch directory. Run setup and research commands from the same directory to reuse it, or select a location explicitly with `--lean-home`.
 
-`uv tool install` installs a wheel and has no interactive post-install hook. **Lean is checked on the first run, or immediately with `lean1 setup`.** If working local Lean 4 and Lake binaries are absent, lean1 asks before downloading the official Elan installer and a Lean toolchain. Installation defaults to `./.elan` in the directory where you launch `lean1` and leaves shell profiles untouched. `lean1 setup` and subsequent runs launched from that directory reuse this installation, including runs with a separate agent workspace.
+The example allows three Codex attempts and emails only after verified completion. **Without `--max-runs`, attempts continue until completion or interruption.** Each attempt uses the existing Codex authentication and model configuration and consumes Codex usage. `Ctrl+C` stops the agent and preserves the workspace.
 
-Discovery checks the configured local Elan directory, the agent workspace's `.elan`, and Lean/Lake binaries directly in the launch directory or workspace, including their `bin/` subdirectories. Use `--lean-home /path/to/elan` to select another installation explicitly. Inherited `ELAN_HOME`, home-directory installations, and external binaries on PATH do not replace the local check; `ELAN_HOME` is set to the selected local directory for the agent and Lean commands. The check reads the local toolchain selection and uses `elan run` without `--install`, so an uninstalled toolchain is not silently downloaded during the check. See the [Lean toolchain documentation](https://lean-lang.org/doc/reference/latest/Build-Tools-and-Distribution/Managing-Toolchains-with-Elan/).
+lean1 automates research attempts and proof checks. Difficult or open problems can remain unresolved, even after many attempts.
+
+## Supply a problem
+
+Choose one input option per invocation:
+
+| Option | Input |
+| --- | --- |
+| `--problem-text TEXT` | Literal problem statement. |
+| `--problem-url URL` | An absolute HTTP or HTTPS link. |
+| `--problem-file PATH` | A local text file, PDF, or other document. |
+| `--problem-file -` | UTF-8 text from standard input. |
+| `--problem VALUE` | Automatically detect a URL or file path, including `@path`; otherwise use text. |
+
+For example:
 
 ```sh
-# Explicit permission for unattended setup; also accepted on a normal run.
-lean1 setup --install-lean
-
-# Choose a local installation location and a toolchain if installation is needed.
-lean1 setup --lean-home ./tools/elan --lean-toolchain leanprover/lean4:v4.19.0
-
-# Check only, with no installation prompt or download.
-lean1 setup --no-install-lean
+lean1 --email researcher@example.com --problem-file ./problem.md --max-runs 3
+lean1 --email researcher@example.com --problem-url https://example.org/problem --max-runs 3
+lean1 --email researcher@example.com --problem-file - --max-runs 3 < problem.md
 ```
 
-Automatic installation supports Linux and macOS and requires `sh` and `curl`. On Windows, install Elan manually first. When installing, a workspace's `lean-toolchain` or `ELAN_TOOLCHAIN` is respected; otherwise the default is `leanprover/lean4:stable`. `--lean-toolchain` selects the toolchain **if installation is needed**. Project toolchain files continue to select the version used by Lean.
+Use an explicit input option when a statement could be mistaken for a path or URL. Text inputs are included in the agent prompt. Documents are copied into the workspace for inspection. For URLs, lean1 attempts to save a snapshot and also passes the link to the agent, since downloaded excerpts can omit equations, attachments, or other context. A failed download leaves the link available for agent browsing.
 
-## Give it a problem
+## Continue work in a workspace
+
+By default, each invocation creates `./lean1-runs/<timestamp>-<id>/`. Set `--workdir` to use a prepared project or continue an earlier attempt:
 
 ```sh
-lean1 --email="you@example.com" --problem="Prove that the sum of two even natural numbers is even."
-lean1 --email="you@example.com" --problem="https://example.org/problem"
-lean1 --email="you@example.com" --problem="./problem.md"
+lean1 \
+  --email researcher@example.com \
+  --problem-file ./problem.md \
+  --workdir ./my-research \
+  --max-runs 3
 ```
 
-`--problem` recognizes http(s) URLs, existing file paths, and `@path`; otherwise it treats the value as text. Explicit variants remove ambiguity:
+Reuse the same problem when continuing a workspace. Existing proofs, notes, and logs are preserved, and log numbering continues. Each attempt starts a fresh Codex execution that can inspect saved files and supervisor feedback. Run one supervisor at a time in a given workspace.
 
-```sh
-lean1 --email="you@example.com" --problem-text="The problem statement goes here."
-lean1 --email="you@example.com" --problem-url="https://example.org/problem"
-lean1 --email="you@example.com" --problem-file="./problem.pdf"
-cat problem.md | lean1 --email="you@example.com" --problem-file=- --install-lean
-```
+## Email notifications
 
-Text files are included in the prompt and copied into the workspace. Binary documents such as PDFs are copied for the agent to inspect. Websites are downloaded when possible; the original link is always passed to the agent, which is instructed to inspect it for equations, attachments, and other context missing from the saved excerpt. A failed snapshot download falls back to agent browsing.
+By default, `--email-backend auto` uses SMTP when `LEAN1_SMTP_HOST` is set; otherwise it runs `mail -s SUBJECT RECIPIENT`.
 
-Each invocation creates `./lean1-runs/<timestamp>-<id>/`. The package does not use the original repository's `workspace/` or `controlled-clifford-hierarchy/`. To work in a prepared repository or continue a previous attempt, set `--workdir`:
-
-```sh
-lean1 --email="you@example.com" --problem-file="./problem.md" --workdir="./my-research"
-lean1 --email="you@example.com" --problem="Prove ..." --max-runs=5 --notify=complete
-```
-
-Use the same problem when continuing a workspace. Existing solution files and notes are preserved, and attempts continue from them. The supervisor uses fresh Codex executions, as the original runner did; previous conversation history is available through the saved messages/files rather than a resumed Codex thread. Avoid running multiple supervisors in the same workspace concurrently.
-
-The command keeps retrying by default. `--max-runs` limits attempts; it never labels an unfinished problem solved. `Ctrl+C` stops the agent and preserves progress. Open problems may remain unresolved indefinitely. This tool automates attempts and verification; it cannot guarantee a mathematical solution.
-
-Other useful options: `--model`, `--restart-delay`, `--verification-timeout`, `--codex-command`, and `--no-network`. Codex retains the `workspace-write` sandbox. Web search and network access are enabled by default so the agent can read links, install project dependencies, and repair Lean. A private Lean installation outside the workspace is added as a writable directory so the agent can manage toolchains. `--no-network` disables agent web search and sandbox network access; Python can still download a supplied website snapshot or install Lean after consent.
-
-## Email
-
-The default remains the original local command: `mail -s SUBJECT RECIPIENT`. Install/configure a mail client and a functioning MTA on your machine, or configure SMTP. Checking that the `mail` executable exists cannot establish whether your MTA actually delivers externally.
-
-SMTP uses Python's standard library. Set these in your shell or secret manager:
+For SMTP, configure the host and sender in the shell before starting lean1:
 
 ```sh
 export LEAN1_SMTP_HOST=smtp.example.com
 export LEAN1_SMTP_PORT=587
 export LEAN1_SMTP_FROM=runner@example.com
 export LEAN1_SMTP_USERNAME=runner@example.com
-# Set LEAN1_SMTP_PASSWORD through your secret manager or shell environment.
 ```
 
-With `LEAN1_SMTP_HOST` set, `--email-backend=auto` selects SMTP; otherwise it selects `mail`. `--email-backend=mail` or `smtp` chooses explicitly. `LEAN1_SMTP_SECURITY` accepts `starttls` (default), `ssl` (default port 465), or `plain` for a local relay. SMTP authentication is optional. SMTP credentials are removed from the environments passed to Codex and Lean.
+For authenticated SMTP, also supply `LEAN1_SMTP_PASSWORD` through the shell environment or a secret manager. SMTP uses STARTTLS by default; authentication is optional for relays that do not require it. See [all SMTP settings](docs/configuration.md#smtp-settings) for SSL and local relay options.
 
-The original behavior of emailing after every attempt is preserved (`--notify=all`). `--notify=complete` sends only after accepted completion. Emails include the final message, verification outcome, runtime, and workspace path. A copy is saved in `.lean1/notifications/` before delivery; failures are logged. SMTP/mail success means submission to the mail server, not confirmation of inbox receipt.
+To use local delivery, install and configure a `mail` client and a mail transfer agent. Finding the executable only confirms that the command is available; the mail service must also be able to deliver messages.
 
-## Prompt and Lean verification
+`--notify all` sends an email after every attempt and is the default. `--notify complete` sends only after accepted completion. Each message includes the final agent response, verification outcome, duration, and workspace path. A copy is saved under `.lean1/notifications/` before delivery. Successful submission to a mail server does not confirm inbox receipt.
 
-`prompt.txt` preserves the original research workflow, insistence on new proofs/counterexamples, Lean repair instructions, and strict termination conditions. The Clifford-specific research problem has been replaced with `{{PROBLEM}}`, and environment-specific paths are filled in at runtime. The template shipped in the wheel is `src/lean1/prompt.txt`; keep these two copies in sync when editing. A test checks that they match. Use `--prompt-file ./custom-prompt.txt` to supply your own template with exactly one `{{PROBLEM}}` placeholder.
+## How completion is checked
 
-The agent must save `result.md`, its Lean sources, and a `lean_verification.json` manifest in the workspace:
+The agent is instructed to write a research report in `result.md`, save the Lean proof sources, and list the essential theorems in `lean_verification.json`.
 
-```json
-{
-  "project_dir": ".",
-  "proofs": [
-    {"file": "Solution.lean", "theorems": ["Solution.main_result"]}
-  ]
-}
-```
+The supervisor accepts completion only when:
 
-`project_dir` is relative to the workspace, proof files are relative to that directory, and theorem names are fully qualified ASCII identifiers. List the named theorems covering all essential claims. For a Lake project, the supervisor runs `lake build`; it then recompiles each listed source with warnings treated as errors, appending theorem checks and `#print axioms` commands to a temporary copy. Standalone Lean files also work. The copies are removed after checking.
-
-A task is complete only when Codex exits successfully, its final message ends with both original markers, and the Python Lean check succeeds:
+1. Codex exits successfully and its final message ends with the two lines below.
+2. The verification manifest identifies valid proof files and named theorems inside the workspace.
+3. `lake build` succeeds for a Lake project, and each listed source recompiles with warnings treated as errors.
+4. The listed theorems depend only on the permitted axioms: `propext`, `Classical.choice`, and `Quot.sound`.
 
 ```text
 TASK_STATUS: COMPLETE
 LEAN_VERIFIED: YES
 ```
 
-The axiom audit permits only `propext`, `Classical.choice`, and `Quot.sound`; it rejects `sorryAx`, custom axioms, and extra trust axioms used by native evaluation. This follows Lean's [proof-validation guidance](https://lean-lang.org/doc/reference/latest/ValidatingProofs/). Failed verification is sent back to the next agent attempt. Checking compilation and axioms cannot automatically establish that a theorem faithfully expresses the requested mathematical problem, or detect all vacuous/overly strong hypotheses; the prompt requires that correspondence to be explained in the report.
+Failed checks are returned as feedback for the next attempt. Proofs that depend on `sorryAx`, custom axioms, or additional native-evaluation trust axioms are rejected.
 
-Saved artifacts:
+Compilation and axiom checks establish properties of the listed formal statements. Human review is still needed to assess whether those statements and their hypotheses faithfully answer the mathematical problem. The [verification guide](docs/verification.md) explains the manifest, checks, and custom prompt format.
 
-- `result.md` and Lean sources: the agent's solution and formal proof.
-- `codex_last_message.md`: latest agent response.
-- `codex_last_output.json`: compact attempt status and references to logs.
-- `codex_runs.log`: supervisor history.
-- `.lean1/prompt.txt`: rendered prompt sent to the latest attempt.
-- `.lean1/inputs/` and `.lean1/problem.json`: saved problem sources and metadata.
-- `.lean1/run-*.events.jsonl`, `run-*.stderr.log`, `run-*.lean.log`: full logs streamed to disk.
-- `.lean1/verification_feedback.txt`: feedback for the next attempt.
-- `.lean1/notifications/*.eml`: saved notification emails.
+## Results and logs
 
-Exit codes: `0` verified completion and email submission; `1` attempt limit reached; `2` setup/configuration error; `3` verified completion but email delivery failed; `130` interrupted.
+All paths below are relative to the run workspace:
+
+| Path | Contents |
+| --- | --- |
+| `result.md` and Lean sources | Research report and formal proof produced by the agent. |
+| `lean_verification.json` | Proof files and theorem names submitted for verification. |
+| `codex_last_message.md` | Latest agent response. |
+| `codex_last_output.json` | Latest attempt status, verification outcome, and log paths. |
+| `codex_runs.log` | Supervisor history. |
+| `.lean1/inputs/` and `.lean1/problem.json` | Saved inputs and source metadata. |
+| `.lean1/prompt.txt` | Rendered prompt for the latest attempt. |
+| `.lean1/run-*.events.jsonl` | Full Codex event streams. |
+| `.lean1/run-*.stderr.log` and `.lean1/run-*.lean.log` | Agent diagnostics and Lean verification logs. |
+| `.lean1/verification_feedback.txt` | Feedback carried into the next attempt after an unsuccessful run. |
+| `.lean1/notifications/*.eml` | Saved notification messages. |
+
+For model selection, retry delays, toolchain discovery, network settings, troubleshooting, and exit codes, see the [configuration reference](docs/configuration.md). Use `lean1 --help` and `lean1 setup --help` for the full command-line interface.
 
 ## Development
 
 ```sh
+uv sync --locked
 uv run python -m unittest discover -s tests -v
 uv build
-python runner.py --help
 ```
 
-The compatibility `runner.py` calls the same CLI. Runtime dependencies are all in the Python standard library. Builds include the package and its prompt, plus tests and the compatibility script in the source distribution. Generated research logs and the existing workspace/hierarchy trees are excluded.
+The tests use simulated Codex, Lean, Lake, and mail executables, plus mocked SMTP delivery. They require no account credentials or live services. See [CONTRIBUTING.md](CONTRIBUTING.md) for the project layout and contribution workflow. Report reproducible problems through [GitHub issues](https://github.com/vimohr/lean1/issues).
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

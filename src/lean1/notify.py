@@ -1,4 +1,4 @@
-"""Email using the original mail command or standard-library SMTP."""
+"""Deliver email notifications through a local mail command or SMTP."""
 
 import os
 import re

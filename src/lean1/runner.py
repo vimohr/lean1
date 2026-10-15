@@ -1,4 +1,4 @@
-"""The restart supervisor, with streamed agent logs and real Lean completion checks."""
+"""Restart Codex attempts, stream logs, and verify Lean proofs."""
 
 import json
 import os
