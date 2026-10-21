@@ -50,7 +50,9 @@ lean1 \
 
 `lean1 setup` checks local Lean and Lake binaries and asks before downloading missing tools. The default installation location is `./.elan` in the launch directory. Run setup and research commands from the same directory to reuse it, or select a location explicitly with `--lean-home`.
 
-The example allows three Codex attempts and emails only after verified completion. **Without `--max-runs`, attempts continue until completion or interruption.** Each attempt uses the existing Codex authentication and model configuration and consumes Codex usage. `Ctrl+C` stops the agent and preserves the workspace.
+The example allows three Codex attempts and emails only after verified completion. **Without `--max-runs`, attempts continue until completion, interruption, or a failsafe stop.** Each attempt consumes Codex usage. Codex state is saved in the workspace's `.codex/` directory, seeded with existing authentication and configuration. `lean1 stop` lets the current attempt finish before stopping; `Ctrl+C` interrupts the agent and preserves the workspace.
+
+A failsafe stops retries if 10 attempts fail within a rolling 60-second window. An attempt counts as failed when Codex exits with an error or produces no final response. Successful attempts that need more research or Lean verification can continue normally. The stop reason is saved in `codex_last_output.json` and the supervisor log.
 
 lean1 automates research attempts and proof checks. Difficult or open problems can remain unresolved, even after many attempts.
 
@@ -89,6 +91,34 @@ lean1 \
 ```
 
 Reuse the same problem when continuing a workspace. Existing proofs, notes, and logs are preserved, and log numbering continues. Each attempt starts a fresh Codex execution that can inspect saved files and supervisor feedback. Run one supervisor at a time in a given workspace.
+
+## Stop after the current attempt
+
+Run this from the directory where you launched lean1, or from inside its workspace:
+
+```sh
+lean1 stop
+```
+
+To select a workspace explicitly, including when several runs were launched from the same directory:
+
+```sh
+lean1 stop --workdir ./my-research
+```
+
+The command acknowledges the request immediately. The supervisor lets the current Codex iteration finish, saves its output, performs any required Lean verification and notifications, and exits before starting another iteration. A request during the restart delay stops further attempts. Resume later by running the original research command with the same `--workdir`.
+
+## Local Codex state
+
+Every Codex attempt uses `CODEX_HOME=<workdir>/.codex`, including when another `CODEX_HOME` is inherited from your shell. Existing workspace credentials and settings are preserved. Missing `auth.json`, `config.toml`, and named `*.config.toml` profile files are copied from the inherited Codex home, or `~/.codex` when none is set. Existing session history and caches are not copied.
+
+To authenticate directly in a workspace, run:
+
+```sh
+CODEX_HOME="$PWD/my-research/.codex" codex login
+```
+
+Codex's configuration, credentials, and runtime state share this directory; see the [official OpenAI documentation](https://learn.chatgpt.com/docs/config-file/config-advanced#config-and-state-locations). Keep workspace credentials out of version control.
 
 ## Email notifications
 
@@ -146,6 +176,7 @@ All paths below are relative to the run workspace:
 | `.lean1/run-*.stderr.log` and `.lean1/run-*.lean.log` | Agent diagnostics and Lean verification logs. |
 | `.lean1/verification_feedback.txt` | Feedback carried into the next attempt after an unsuccessful run. |
 | `.lean1/notifications/*.eml` | Saved notification messages. |
+| `.codex/` | Workspace-local Codex authentication, configuration, sessions, logs, and caches. |
 
 For model selection, retry delays, toolchain discovery, network settings, troubleshooting, and exit codes, see the [configuration reference](docs/configuration.md). Use `lean1 --help` and `lean1 setup --help` for the full command-line interface.
 

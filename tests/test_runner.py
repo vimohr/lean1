@@ -27,13 +27,14 @@ FAKE_TOOLS = r'''
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 root = Path(os.environ["LEAN1_TEST_ROOT"])
 name = Path(sys.argv[0]).name
 with (root / "commands.jsonl").open("a") as stream:
-    stream.write(json.dumps({"name": name, "args": sys.argv[1:], "cwd": os.getcwd(), "elan_home": os.environ.get("ELAN_HOME"), "smtp_secret_present": bool(os.environ.get("LEAN1_SMTP_PASSWORD"))}) + "\n")
+    stream.write(json.dumps({"name": name, "args": sys.argv[1:], "cwd": os.getcwd(), "elan_home": os.environ.get("ELAN_HOME"), "codex_home": os.environ.get("CODEX_HOME"), "smtp_secret_present": bool(os.environ.get("LEAN1_SMTP_PASSWORD"))}) + "\n")
 if name == "lean":
     if "--version" in sys.argv:
         if os.environ.get("LEAN1_TEST_PROXY_MISSING"):
@@ -81,7 +82,28 @@ if name == "codex":
     count_file.write_text(str(count))
     (root / f"prompt-{count}.txt").write_text(prompt)
     mode = os.environ.get("LEAN1_TEST_MODE", "success")
+    if mode == "startup-failure":
+        print("Agent startup failed: authentication is unavailable.", file=sys.stderr)
+        sys.exit(7)
+    if mode == "empty-response":
+        print(json.dumps({"type": "thread.started"}))
+        sys.exit(0)
     Path("AGENT_STARTED.txt").write_text("Codex started successfully.\n")
+    if mode.startswith("stop-"):
+        binary = os.environ.get("LEAN1_TEST_CLI")
+        command = [binary] if binary else [sys.executable, "-m", "lean1"]
+        arguments = ["stop"]
+        stop_cwd = root if mode != "stop-workspace" else Path.cwd()
+        if mode == "stop-explicit":
+            arguments += ["--workdir", str(Path.cwd())]
+            stop_cwd = root / "elsewhere"
+            stop_cwd.mkdir(exist_ok=True)
+        stopped = subprocess.run(command + arguments, cwd=stop_cwd, text=True, capture_output=True, timeout=10)
+        (root / "stop-result.json").write_text(json.dumps({"code": stopped.returncode, "stdout": stopped.stdout, "stderr": stopped.stderr}))
+        if stopped.returncode:
+            print(stopped.stderr, file=sys.stderr)
+            sys.exit(99)
+        Path("AFTER_STOP_REQUEST.txt").write_text("The current iteration continued after the stop request.\n")
     source = "namespace Solution\ntheorem answer : 1 = 1 := by rfl\nend Solution\n"
     if mode == "retry-proof" and count == 1:
         source = "namespace Solution\ntheorem answer : 1 = 1 := by sorry\nend Solution\n"
@@ -92,7 +114,7 @@ if name == "codex":
     if mode != "no-manifest":
         Path("lean_verification.json").write_text(json.dumps({"project_dir": ".", "proofs": [{"file": "Solution.lean", "theorems": ["Solution.answer"]}]}))
     final = "Solved.\nTASK_STATUS: COMPLETE\nLEAN_VERIFIED: YES"
-    if mode == "incomplete" or mode == "retry-status" and count == 1:
+    if mode in {"incomplete", "stop-launch", "stop-workspace", "stop-explicit"} or mode == "retry-status" and count == 1:
         final = "The proof is still in progress."
     print("non-json diagnostic")
     print(json.dumps(["non-event"]))
@@ -299,6 +321,7 @@ class PipelineTests(unittest.TestCase):
             "PATH": str(self.bin) + os.pathsep + os.environ.get("PATH", ""),
             "PYTHONPATH": str(REPO / "src"),
             "ELAN_HOME": str(self.root / "uninstalled-elan"),
+            "CODEX_HOME": str(self.root / "codex-seed"),
             "XDG_DATA_HOME": str(self.root / "data"),
             "LEAN1_TEST_ROOT": str(self.root),
             "LEAN1_SMTP_PASSWORD": "test-secret-must-not-reach-agent",
@@ -443,6 +466,117 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertFalse(self.output()["task_complete"])
         self.assertEqual(self.emails(), [])
+
+    def test_rapid_startup_failures_stop_and_allow_continuation(self):
+        result = self.run_cli("startup-failure", max_runs=0)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual((self.workdir / "attempt-count").read_text(), "10")
+        self.assertEqual(self.output()["run_number"], 10)
+        self.assertIn("10 times within 60 seconds", self.output()["stop_reason"])
+        self.assertIn("authentication is unavailable", self.output()["stderr"])
+        self.assertIn("Failsafe:", result.stdout)
+        self.assertIn("stopped incomplete", self.emails()[-1]["args"][1])
+        self.assertIn(self.output()["stop_reason"], self.emails()[-1]["body"])
+        self.assertFalse((self.workdir / "AGENT_STARTED.txt").exists())
+        self.assertFalse((self.workdir / ".lean1/active_run.json").exists())
+        result = self.run_cli()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.output()["run_number"], 11)
+        self.assertNotIn("stop_reason", self.output())
+
+    def test_empty_agent_responses_stop_without_complete_only_email(self):
+        result = self.run_cli("empty-response", extra=("--notify=complete",), max_runs=0)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual((self.workdir / "attempt-count").read_text(), "10")
+        self.assertEqual(self.output()["exit_code"], 0)
+        self.assertEqual(self.output()["event_count"], 1)
+        self.assertIn("stop_reason", self.output())
+        self.assertEqual(self.emails(), [])
+
+    def test_stop_finishes_current_iteration_saves_results_and_allows_continuation(self):
+        for mode in ("stop-launch", "stop-workspace", "stop-explicit"):
+            with self.subTest(mode=mode):
+                self.workdir = self.root / mode
+                result = self.run_cli(mode, max_runs=3)
+                self.assertEqual(result.returncode, 130, result.stdout + result.stderr)
+                stopped = json.loads((self.root / "stop-result.json").read_text())
+                self.assertEqual(stopped["code"], 0, stopped)
+                self.assertEqual((self.workdir / "attempt-count").read_text(), "1")
+                self.assertTrue((self.workdir / "AFTER_STOP_REQUEST.txt").exists())
+                self.assertEqual(self.output()["final_message"], "The proof is still in progress.")
+                self.assertTrue(self.output()["stop_requested"])
+                self.assertIn("stopped incomplete", self.emails()[-1]["args"][1])
+                self.assertFalse((self.workdir / ".lean1/active_run.json").exists())
+                self.assertFalse((self.workdir / ".lean1/stop_requested").exists())
+                result = self.run_cli()
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(self.output()["run_number"], 2)
+                self.assertFalse(self.output()["stop_requested"])
+        self.assertEqual(list((self.root / ".lean1/active-runs").glob("*.json")), [])
+
+    def test_stop_still_verifies_and_notifies_a_completed_solution(self):
+        result = self.run_cli("stop-success", extra=("--notify=complete",), max_runs=3)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.output()["run_number"], 1)
+        self.assertTrue(self.output()["stop_requested"])
+        self.assertTrue(self.output()["verification"]["success"])
+        self.assertIn("completed task", self.emails()[0]["args"][1])
+
+    def test_stop_respects_complete_only_notifications(self):
+        result = self.run_cli("stop-launch", extra=("--notify=complete",), max_runs=0)
+        self.assertEqual(result.returncode, 130, result.stdout + result.stderr)
+        self.assertEqual(self.output()["run_number"], 1)
+        self.assertEqual(self.emails(), [])
+
+    def test_stop_without_a_running_supervisor_needs_no_dependencies(self):
+        for name in ("codex", "lean", "lake", "mail"):
+            (self.bin / name).unlink()
+        result = self.run_command(["stop"])
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("No active lean1 run", result.stderr)
+        result = self.run_command(["stop", "--workdir", str(self.workdir)])
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertFalse(self.workdir.exists())
+
+    def test_codex_state_uses_workspace_home_over_inherited_home(self):
+        inherited = self.root / "inherited-codex"
+        inherited.mkdir()
+        (inherited / "auth.json").write_text('{"token": "test-login"}')
+        (inherited / "config.toml").write_text('model = "configured-model"\n')
+        (inherited / "review.config.toml").write_text('model_reasoning_effort = "high"\n')
+        (inherited / "history.jsonl").write_text("global history must stay global\n")
+        self.env["CODEX_HOME"] = str(inherited)
+        result = self.run_cli()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        codex = [entry for entry in self.commands() if entry["name"] == "codex"]
+        local_home = self.workdir / ".codex"
+        self.assertEqual(codex[0]["codex_home"], str(local_home))
+        for name in ("auth.json", "config.toml", "review.config.toml"):
+            self.assertEqual((local_home / name).read_bytes(), (inherited / name).read_bytes())
+            if os.name == "posix":
+                self.assertEqual((local_home / name).stat().st_mode & 0o777, 0o600)
+        self.assertFalse((local_home / "history.jsonl").exists())
+        (local_home / "auth.json").write_text("workspace-login")
+        (local_home / "config.toml").write_text("workspace-configuration")
+        result = self.run_cli()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((local_home / "auth.json").read_text(), "workspace-login")
+        self.assertEqual((local_home / "config.toml").read_text(), "workspace-configuration")
+        self.assertEqual((inherited / "auth.json").read_text(), '{"token": "test-login"}')
+
+    def test_default_codex_home_seeds_from_user_home_without_writing_there(self):
+        user_home = self.root / "user-home"
+        original = user_home / ".codex"
+        original.mkdir(parents=True)
+        (original / "auth.json").write_text("existing-login")
+        self.env.pop("CODEX_HOME", None)
+        self.env["HOME"] = str(user_home)
+        result = self.run_cli()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        codex = [entry for entry in self.commands() if entry["name"] == "codex"]
+        self.assertEqual(codex[0]["codex_home"], str(self.workdir / ".codex"))
+        self.assertEqual((self.workdir / ".codex/auth.json").read_text(), "existing-login")
+        self.assertEqual(list(original.iterdir()), [original / "auth.json"])
 
     def test_mail_failure_keeps_verified_result_and_unsent_email(self):
         self.env["LEAN1_TEST_MAIL_FAIL"] = "1"

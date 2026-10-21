@@ -45,7 +45,7 @@ A research invocation requires `--email` and exactly one problem input option. T
 | Option | Default | Behavior |
 | --- | --- | --- |
 | `--workdir PATH` | `./lean1-runs/<timestamp>-<id>` | Directory containing the agent's files and run state. |
-| `--max-runs N` | `0` | Maximum attempts in this invocation; `0` retries until completion. |
+| `--max-runs N` | `0` | Maximum attempts in this invocation; `0` retries until completion or the failsafe stops retries. |
 | `--restart-delay SECONDS` | `3` | Delay between incomplete attempts; zero is allowed. |
 | `--verification-timeout SECONDS` | `1800` | Timeout for each Lean or Lake verification command; must be positive. |
 | `--model NAME` | Codex configuration | Override the model for agent attempts. |
@@ -56,7 +56,35 @@ A research invocation requires `--email` and exactly one problem input option. T
 | `--mail-command PATH` | `mail` | Local mail executable name or path. |
 | `--no-network` | Network enabled | Disable Codex web search and network access in its workspace sandbox. |
 
-`--version` reports the installed version. Run `lean1 --help` or `lean1 setup --help` for all options.
+`--version` reports the installed version. Run `lean1 --help`, `lean1 setup --help`, or `lean1 stop --help` for command options.
+
+Retries stop automatically after 10 failed Codex attempts within a rolling 60-second window, even with `--max-runs 0`. A failure means a nonzero exit code or no nonempty final agent response; incomplete research and failed Lean verification alone do not count. The window includes each attempt's runtime and the delays between attempts. Older failures expire, and a new supervisor invocation starts with a fresh count.
+
+The failsafe exits with code `1`, preserves attempt logs and results, and records `stop_reason` in `codex_last_output.json` and `codex_runs.log`. With `--notify all`, the final email reports that retries have stopped and includes the reason. Inspect `.lean1/run-*.stderr.log` and fix any startup, authentication, or configuration errors before running again with the same workspace.
+
+## Graceful stopping
+
+`lean1 stop` requests a stop after the current Codex iteration, Lean verification, and notification delivery finish. It returns immediately and requires no problem, email, Codex, or Lean options. Use `lean1 stop --workdir PATH` to select a workspace explicitly.
+
+Without `--workdir`, lean1 first looks for an active supervisor in the current directory or a parent workspace. Otherwise, it selects the only active run registered in the current launch directory's `.lean1/active-runs/`. If several runs are active there, the command lists their workspaces and requires an explicit selection. If no active run is found, it exits with code `2`.
+
+Active supervisors record their identity in `<workdir>/.lean1/active_run.json`. A stop request is stored in `<workdir>/.lean1/stop_requested` and applies only to that supervisor invocation. These files and the launch-directory registration are removed when the supervisor exits. A later invocation in the workspace starts normally. Requests during the restart delay prevent another Codex attempt from starting.
+
+The stop command exits with code `0` when the request is recorded. The supervisor exits with code `130` if stopped without a verified solution. A solution verified during the final iteration retains the normal completion exit code (`0`, or `3` if completion email delivery fails). `Ctrl+C` still interrupts the active agent immediately.
+
+## Codex home
+
+lean1 sets the Codex subprocess's `CODEX_HOME` to the absolute path `<workdir>/.codex`. Each workspace therefore keeps its own Codex sessions, logs, caches, credentials, and configuration. Continuing with the same `--workdir` reuses that directory.
+
+Missing `auth.json`, `config.toml`, and named `*.config.toml` profile files are seeded from the inherited `CODEX_HOME`, or `~/.codex` when the variable is unset. That source is read only; existing files in the workspace's `.codex/` are never overwritten. New directories and seeded files are private to the current user on POSIX systems. Other files, including prior session history, skills, and caches, are not copied.
+
+To log in or adjust the workspace's configuration directly, give Codex the same home:
+
+```sh
+CODEX_HOME="$PWD/my-research/.codex" codex login
+```
+
+The [official OpenAI configuration guide](https://learn.chatgpt.com/docs/config-file/config-advanced#config-and-state-locations) describes the state stored under `CODEX_HOME`. Keep this directory out of version control because it can contain credentials.
 
 ## Agent permissions and network access
 
@@ -85,18 +113,18 @@ lean1 removes `LEAN1_SMTP_*` variables from environments passed to Codex, Lean, 
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Verified completion with successful email submission, or a successful setup command. |
-| `1` | The attempt limit was reached without an accepted solution. |
+| `0` | Verified completion with successful email submission, a successful setup command, or a recorded stop request. |
+| `1` | The attempt limit or the rapid-failure failsafe stopped retries without an accepted solution. |
 | `2` | A configuration, setup, or execution error prevented the command from completing. |
 | `3` | The solution passed verification, but its completion email could not be delivered. |
-| `130` | The command was interrupted. |
+| `130` | The research command was interrupted, or gracefully stopped without a verified solution. |
 
 ## Troubleshooting
 
 | Symptom | Next step |
 | --- | --- |
 | `lean1` is not found | Run `uv tool update-shell`, restart the shell, and check the installation with `uv tool list`. |
-| Codex is not found or cannot authenticate | Install the [Codex CLI](https://learn.chatgpt.com/docs/codex/cli), run `codex login`, and check `--codex-command` if using a custom path. |
+| Codex is not found or cannot authenticate | Install the [Codex CLI](https://learn.chatgpt.com/docs/codex/cli), check `--codex-command` if using a custom path, and authenticate with `CODEX_HOME="$PWD/my-research/.codex" codex login` for an existing workspace. |
 | Lean is installed globally but is not detected | Select it explicitly, for example `lean1 setup --lean-home ~/.elan --no-install-lean`. |
 | Lean setup fails in a noninteractive session | Install tools beforehand, or permit local installation with `--install-lean`. |
 | A project needs a missing toolchain | Check its `lean-toolchain` file and install that version using `lean1 setup --workdir ./my-project --install-lean`. |

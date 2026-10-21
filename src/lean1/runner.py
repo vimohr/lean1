@@ -3,21 +3,26 @@
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import time
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 from importlib.resources import files
 from pathlib import Path
 
 from .common import RunnerError, atomic_write, log, read_tail, write_json
+from .control import ActiveRun, active_run
 from .lean import LeanTools
 from .notify import EmailConfig
 from .verification import Verification, verify
 
 COMPLETE_MARKER = "TASK_STATUS: COMPLETE"
 LEAN_MARKER = "LEAN_VERIFIED: YES"
+FAILURE_LIMIT = 10
+FAILURE_WINDOW_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -104,6 +109,31 @@ def stop_process(process: subprocess.Popen[str]) -> None:
         process.wait()
 
 
+def codex_environment(workdir: Path, base_env: dict[str, str]) -> dict[str, str]:
+    """Keep runtime state local while seeding existing credentials and settings."""
+    home = (workdir / ".codex").resolve()
+    home.mkdir(mode=0o700, parents=True, exist_ok=True)
+    source = Path(base_env.get("CODEX_HOME") or str(Path.home() / ".codex")).expanduser().resolve()
+    if source != home:
+        for original in (source / "auth.json", source / "config.toml", *source.glob("*.config.toml")):
+            destination = home / original.name
+            if not original.is_file() or destination.exists():
+                continue
+            # Exclusive creation preserves workspace-specific login/configuration.
+            try:
+                descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            except FileExistsError:
+                continue
+            try:
+                with os.fdopen(descriptor, "wb") as target, original.open("rb") as existing:
+                    shutil.copyfileobj(existing, target)
+            except BaseException:
+                destination.unlink(missing_ok=True)
+                raise
+    env = {key: value for key, value in base_env.items() if not key.startswith("LEAN1_SMTP_")}
+    return env | {"CODEX_HOME": str(home)}
+
+
 def run_codex(config: RunConfig, run_number: int) -> dict[str, object]:
     print(f"\n=== Codex run #{run_number} ===", flush=True)
     prompt = load_prompt(config)
@@ -115,8 +145,7 @@ def run_codex(config: RunConfig, run_number: int) -> dict[str, object]:
     started = time.monotonic()
     final_message: str | None = None
     event_count = 0
-    # SMTP credentials belong to the notifier, not to agent or Lean processes.
-    env = {key: value for key, value in config.tools.env.items() if not key.startswith("LEAN1_SMTP_")}
+    env = codex_environment(config.workdir, config.tools.env)
     with prompt_path.open("r", encoding="utf-8") as prompt_input, events_file.open("w", encoding="utf-8") as events, stderr_file.open("w", encoding="utf-8") as errors:
         process = subprocess.Popen(
             codex_command(config), cwd=config.workdir, env=env, stdin=prompt_input,
@@ -179,31 +208,58 @@ def run_codex(config: RunConfig, run_number: int) -> dict[str, object]:
     return output
 
 
-def supervise(config: RunConfig) -> int:
+def _stopped(config: RunConfig) -> int:
+    output_path = config.workdir / "codex_last_output.json"
+    if output_path.is_file():
+        output = json.loads(output_path.read_text(encoding="utf-8"))
+        output["stop_requested"] = True
+        write_json(output_path, output)
+    log(config.workdir, "supervisor stopped after a graceful stop request")
+    print("Stopped after the current attempt; workspace and progress have been saved.", flush=True)
+    return 130
+
+
+def _supervise(config: RunConfig, control: ActiveRun) -> int:
     config.workdir.mkdir(parents=True, exist_ok=True)
     state = config.workdir / ".lean1"
     state.mkdir(exist_ok=True)
     # Validate the installed/custom resource before starting a paid agent run.
     load_prompt(config)
     print(f"Workspace: {config.workdir}", flush=True)
+    print(f"Codex home: {config.workdir / '.codex'}", flush=True)
     print(f"Notifications: {config.email.recipient} ({config.email.backend}; {config.notify})", flush=True)
     run_number = 0
+    failed_attempts: deque[float] = deque()
     # Continue log numbering when the same workspace is used again.
     prior = state.glob("run-*.events.jsonl")
     numbers = [int(path.name.split(".")[0].split("-")[1]) for path in prior if re.fullmatch(r"run-\d+\.events\.jsonl", path.name)]
     next_number = max(numbers, default=0)
     try:
         while config.max_runs == 0 or run_number < config.max_runs:
+            if control.stop_requested():
+                return _stopped(config)
             run_number += 1
+            attempt_started = time.monotonic()
             output = run_codex(config, next_number + run_number)
             complete = output["task_complete"]
+            if output["exit_code"] or not (output["final_message"] or "").strip():
+                failed_attempts.append(attempt_started)
+            now = time.monotonic()
+            while failed_attempts and now - failed_attempts[0] > FAILURE_WINDOW_SECONDS:
+                failed_attempts.popleft()
+            failsafe_reason = None
+            if len(failed_attempts) >= FAILURE_LIMIT:
+                failsafe_reason = f"Codex failed to run {FAILURE_LIMIT} times within {FAILURE_WINDOW_SECONDS} seconds; stopping retries."
+                output["stop_reason"] = failsafe_reason
+                log(config.workdir, f"supervisor failsafe: {failsafe_reason}")
             last_attempt = bool(config.max_runs and run_number == config.max_runs)
+            stop_requested = control.stop_requested()
             reason = f"exit={output['exit_code']}, duration={output['duration_seconds']}s, complete={complete}"
             log(config.workdir, f"run #{output['run_number']}: {reason}")
             print(f"Finished run #{output['run_number']}: {reason}", flush=True)
             notification_error = None
             if config.notify == "all" or complete:
-                status = "completed task" if complete else "stopped incomplete" if last_attempt else "restarting"
+                status = "completed task" if complete else "stopped incomplete" if last_attempt or stop_requested or failsafe_reason else "restarting"
                 subject = f"Codex {status} after run #{output['run_number']}"
                 body = (
                     f"Codex run #{output['run_number']} finished.\n\n"
@@ -213,19 +269,33 @@ def supervise(config: RunConfig) -> int:
                     f"Last Codex message:\n\n{output['final_message'] or '(No final message)'}\n\n"
                     f"stderr:\n\n{output['stderr'] or '(empty)'}\n"
                 )
+                if failsafe_reason:
+                    body += f"\nStop reason: {failsafe_reason}\n"
                 notification_error = config.email.send(config.workdir, int(output["run_number"]), subject, body)
                 if notification_error:
                     log(config.workdir, notification_error)
             output["notification_error"] = notification_error
+            # A request can also arrive while a notification is being delivered.
+            output["stop_requested"] = stop_requested = control.stop_requested()
             write_json(config.workdir / "codex_last_output.json", output)
             if complete:
                 print(f"Task complete and Lean verified. Result: {config.workdir / 'codex_last_message.md'}", flush=True)
                 return 3 if notification_error else 0
+            if stop_requested:
+                return _stopped(config)
+            if failsafe_reason:
+                print(f"Failsafe: {failsafe_reason} Details: {config.workdir / 'codex_last_output.json'}", flush=True)
+                return 1
             if last_attempt:
                 print(f"Reached --max-runs without a verified solution. Details: {config.workdir / 'codex_last_output.json'}", flush=True)
                 return 1
             print(f"Result incomplete or verification failed. Restarting in {config.restart_delay:g}s ...", flush=True)
-            time.sleep(config.restart_delay)
+            deadline = time.monotonic() + config.restart_delay
+            while not control.stop_requested():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                time.sleep(min(0.1, remaining))
     except KeyboardInterrupt:
         log(config.workdir, "supervisor stopped by user")
         print("\nStopped; workspace and progress have been saved.", flush=True)
@@ -234,3 +304,8 @@ def supervise(config: RunConfig) -> int:
         log(config.workdir, f"supervisor error: {exc}")
         raise
     return 1
+
+
+def supervise(config: RunConfig) -> int:
+    with active_run(config.workdir) as control:
+        return _supervise(config, control)

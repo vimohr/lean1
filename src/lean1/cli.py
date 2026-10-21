@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from . import __version__
 from .common import RunnerError
+from .control import request_stop
 from .lean import ensure_lean
 from .notify import EmailConfig
 from .problems import prepare_problem, resolve_problem
@@ -56,7 +57,7 @@ def run_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="lean1",
         description="Run a Codex research agent until its solution passes Lean verification, then email the result.",
-        epilog="Run 'lean1 setup' to check/install Lean separately. Codex CLI must already be installed and authenticated.",
+        epilog="Run 'lean1 setup' to check/install Lean separately, or 'lean1 stop' to stop after the current attempt. Codex CLI must already be installed and authenticated.",
     )
     parser.add_argument("--version", action="version", version=f"lean1 {__version__}")
     parser.add_argument("--email", required=True, help="Email recipient for run notifications.")
@@ -69,7 +70,7 @@ def run_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prompt-file", type=Path, help="Custom prompt template containing {{PROBLEM}} (default: bundled prompt.txt).")
     parser.add_argument("--codex-command", default="codex", help="Codex executable name/path (default: codex).")
     parser.add_argument("--model", help="Override the configured Codex model.")
-    parser.add_argument("--max-runs", type=nonnegative_integer, default=0, help="Maximum attempts in this invocation; 0 retries until verified (default: 0).")
+    parser.add_argument("--max-runs", type=nonnegative_integer, default=0, help="Maximum attempts in this invocation; 0 retries until verified or the failsafe stops retries (default: 0).")
     parser.add_argument("--restart-delay", type=nonnegative_float, default=3, help="Seconds between attempts (default: 3).")
     parser.add_argument("--verification-timeout", type=positive_float, default=1800, help="Seconds allowed per Lean/build command (default: 1800).")
     parser.add_argument("--notify", choices=("all", "complete"), default="all", help="Email after every attempt (all), or only verified completion (complete).")
@@ -87,12 +88,23 @@ def setup_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def stop_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="lean1 stop", description="Stop a running supervisor after its current Codex attempt, verification, and notifications finish.")
+    parser.add_argument("--workdir", type=Path, help="Workspace to stop (default: the current workspace or the only active run launched from this directory).")
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     setup = arguments[:1] == ["setup"]
-    parser = setup_parser() if setup else run_parser()
-    options = parser.parse_args(arguments[1:] if setup else arguments)
+    stop = arguments[:1] == ["stop"]
+    parser = stop_parser() if stop else setup_parser() if setup else run_parser()
+    options = parser.parse_args(arguments[1:] if setup or stop else arguments)
     try:
+        if stop:
+            workdir = request_stop(options.workdir)
+            print(f"Stop requested for {workdir}. The current attempt, verification, and notifications will finish before the supervisor exits.", flush=True)
+            return 0
         if setup:
             workdir = options.workdir.expanduser().resolve()
             if not workdir.is_dir():

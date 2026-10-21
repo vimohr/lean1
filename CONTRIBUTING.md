@@ -25,6 +25,7 @@ For an editable installation on the shell's tool path, use `uv tool install --ed
 | `src/lean1/problems.py` | Problem input detection, copying, and URL snapshots. |
 | `src/lean1/lean.py` | Local Lean discovery and installation. |
 | `src/lean1/runner.py` | Codex executions, retries, logs, and completion handling. |
+| `src/lean1/control.py` | Active workspace registration and graceful stop requests. |
 | `src/lean1/verification.py` | Manifest validation, Lean compilation, and axiom checks. |
 | `src/lean1/notify.py` | Local mail and SMTP notifications. |
 | `src/lean1/prompt.txt` and `prompt.txt` | Matching copies of the bundled research template. |
