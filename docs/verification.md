@@ -65,6 +65,12 @@ The supervisor compiles the sources and checks the dependencies of the names sup
 
 The bundled prompt requires the agent to explain the correspondence in `result.md` and to avoid weakening the problem, assuming its conclusion, or substituting unrelated theorems. Review that explanation alongside the formal statements when assessing a result.
 
+## Independent review of standard problems
+
+With `--standard-problem`, a verified solution is not yet accepted. A separate Codex execution acts as a referee and decides whether the verified theorems answer the problem exactly as stated on qiqc-op.com: the same objects, quantifiers, conventions, and scope, with faithful definitions and no extra hypotheses. A rejection returns the referee's issues to the research agent as feedback. The referee must not edit solution files; the supervisor compares their hashes before and after the review. See [Standard problems](standard-problems.md#stages-for-each-problem).
+
+The review is an automated check by another agent. It reduces, but does not replace, the human review described above.
+
 ## Custom prompts
 
 The bundled research instructions are in [`src/lean1/prompt.txt`](../src/lean1/prompt.txt), with an identical top-level [`prompt.txt`](../prompt.txt) for convenient inspection and editing.

@@ -68,6 +68,10 @@ class EmailConfig:
         )
 
     def send(self, workdir: Path, run_number: int, subject: str, body: str) -> str | None:
+        return self.send_named(workdir, f"run-{run_number:04d}", subject, body)
+
+    def send_named(self, workdir: Path, name: str, subject: str, body: str) -> str | None:
+        """Save the message as .lean1/notifications/<name>.eml, then submit it."""
         message = EmailMessage()
         message["To"] = self.recipient
         if self.sender:
@@ -76,7 +80,7 @@ class EmailConfig:
         message["Date"] = formatdate(localtime=True)
         message["Message-ID"] = make_msgid()
         message.set_content(body)
-        saved = workdir / ".lean1" / "notifications" / f"run-{run_number:04d}.eml"
+        saved = workdir / ".lean1" / "notifications" / f"{name}.eml"
         atomic_write(saved, message.as_string())
         try:
             if self.backend == "mail":

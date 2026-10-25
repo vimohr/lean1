@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -44,3 +45,9 @@ def read_tail(path: Path, limit: int = 16_384) -> str:
         stream.seek(0, 2)
         stream.seek(max(0, stream.tell() - limit))
         return stream.read().decode("utf-8", errors="replace")
+
+
+def render_template(template: str, replacements: dict[str, str]) -> str:
+    """Substitute {{NAME}} placeholders in one pass, so supplied text stays literal."""
+    pattern = r"\{\{(" + "|".join(re.escape(name) for name in replacements) + r")\}\}"
+    return re.sub(pattern, lambda match: replacements[match.group(1)], template)

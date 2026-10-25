@@ -40,12 +40,13 @@ Automatic installation supports Linux and macOS and requires `sh` and `curl`. On
 
 ## Research options
 
-A research invocation requires `--email` and exactly one problem input option. The [README](../README.md#supply-a-problem) describes input formats.
+A research invocation requires `--email` and exactly one problem input option. The [README](../README.md#supply-a-problem) describes input formats. `--standard-problem` instead runs a campaign over unsolved problems from qiqc-op.com; see [Standard problems](standard-problems.md).
 
 | Option | Default | Behavior |
 | --- | --- | --- |
 | `--workdir PATH` | `./lean1-runs/<timestamp>-<id>` | Directory containing the agent's files and run state. |
-| `--max-runs N` | `0` | Maximum attempts in this invocation; `0` retries until completion or the failsafe stops retries. |
+| `--max-runs N` | `0` | Maximum attempts in this invocation, or per problem with `--standard-problem`; `0` retries until completion or the failsafe stops retries. |
+| `--max-problems N` | `0` | With `--standard-problem`, stop after `N` problems; `0` continues until an issue or a stop request. |
 | `--restart-delay SECONDS` | `3` | Delay between incomplete attempts; zero is allowed. |
 | `--verification-timeout SECONDS` | `1800` | Timeout for each Lean or Lake verification command; must be positive. |
 | `--model NAME` | Codex configuration | Override the model for agent attempts. |
@@ -54,13 +55,34 @@ A research invocation requires `--email` and exactly one problem input option. T
 | `--notify all\|complete` | `all` | Notify after every attempt or only accepted completion. |
 | `--email-backend auto\|mail\|smtp` | `auto` | Choose the notification backend. |
 | `--mail-command PATH` | `mail` | Local mail executable name or path. |
-| `--no-network` | Network enabled | Disable Codex web search and network access in its workspace sandbox. |
+| `--no-network` | Network enabled | Disable Codex web search and network access in its workspace sandbox. Not allowed with `--standard-problem`. |
+| `--no-health-check` | Enabled | Skip the [Codex health check](#codex-health-check). |
+| `--health-check-timeout SECONDS` | `300` | Time allowed for one health check. |
+| `--health-check-retries N` | `1` | Further health checks, 30 seconds apart, before pausing. |
+| `--author-name`, `--author-affiliation`, `--author-orcid` | Unset | Author metadata for [publication packages](standard-problems.md#stages-for-each-problem). |
 
 `--version` reports the installed version. Run `lean1 --help`, `lean1 setup --help`, or `lean1 stop --help` for command options.
 
 Retries stop automatically after 10 failed Codex attempts within a rolling 60-second window, even with `--max-runs 0`. A failure means a nonzero exit code or no nonempty final agent response; incomplete research and failed Lean verification alone do not count. The window includes each attempt's runtime and the delays between attempts. Older failures expire, and a new supervisor invocation starts with a fresh count.
 
-The failsafe exits with code `1`, preserves attempt logs and results, and records `stop_reason` in `codex_last_output.json` and `codex_runs.log`. With `--notify all`, the final email reports that retries have stopped and includes the reason. Inspect `.lean1/run-*.stderr.log` and fix any startup, authentication, or configuration errors before running again with the same workspace.
+The failsafe exits with code `1`, preserves attempt logs and results, and records `stop_reason` in `codex_last_output.json` and `codex_runs.log`. The final email reports that retries have stopped and includes the reason. It is sent with either `--notify` setting, because the failsafe is an issue. Inspect `.lean1/run-*.stderr.log` and fix any startup, authentication, or configuration errors before running again with the same workspace.
+
+## Codex health check
+
+Before every Codex execution (each research attempt and, with `--standard-problem`, each review and publication run), lean1 starts Codex with a minimal prompt that asks for one fixed reply. The check uses the same executable, model, sandbox, network setting, and workspace `CODEX_HOME` as the real execution. It runs in `<workdir>/.lean1/health/`, so the solution files are untouched.
+
+A check fails if Codex cannot be started, exits with an error, exceeds `--health-check-timeout`, or gives a different reply. Authentication problems, exhausted usage limits, unavailable models, and network failures are therefore detected before a long attempt starts. A failed check is repeated `--health-check-retries` times, 30 seconds apart. If every check fails, lean1 pauses:
+
+- No further Codex execution starts.
+- An email is sent whatever the `--notify` setting. Its subject starts with `lean1 stopped:`, and its body contains Codex's error messages, its stderr, and how to resume.
+- The reason is saved in `.lean1/last_issue.json`, and the check's logs in `.lean1/health/`.
+- lean1 exits with code `4`.
+
+Fix the cause, then run the same command with the same `--workdir` to resume. Each check costs one short Codex request. Disable checks with `--no-health-check`.
+
+## Issue emails
+
+lean1 always sends an email when it stops because of an issue, also with `--notify complete`. Issues are a failed health check, the rapid-failure failsafe, problem website failures, review or publication failures, and unexpected supervisor errors. Graceful stops, `Ctrl+C`, and reaching `--max-runs` or `--max-problems` are not issues. Issue emails are saved as `.lean1/notifications/issue-*.eml` before delivery.
 
 ## Graceful stopping
 
@@ -117,6 +139,9 @@ lean1 removes `LEAN1_SMTP_*` variables from environments passed to Codex, Lean, 
 | `1` | The attempt limit or the rapid-failure failsafe stopped retries without an accepted solution. |
 | `2` | A configuration, setup, or execution error prevented the command from completing. |
 | `3` | The solution passed verification, but its completion email could not be delivered. |
+| `4` | The Codex health check failed; lean1 paused and sent an email. |
+| `5` | No valid unsolved problem could be obtained from the problem website. |
+| `6` | The review or publication agent failed to produce a valid result. |
 | `130` | The research command was interrupted, or gracefully stopped without a verified solution. |
 
 ## Troubleshooting
@@ -129,5 +154,7 @@ lean1 removes `LEAN1_SMTP_*` variables from environments passed to Codex, Lean, 
 | Lean setup fails in a noninteractive session | Install tools beforehand, or permit local installation with `--install-lean`. |
 | A project needs a missing toolchain | Check its `lean-toolchain` file and install that version using `lean1 setup --workdir ./my-project --install-lean`. |
 | Email delivery fails | Check the chosen backend and SMTP or local mail configuration. Inspect saved `.eml` messages and `notification_error` in `codex_last_output.json`. |
+| lean1 paused after a failed health check | Read the issue email or `.lean1/last_issue.json` and `.lean1/health/check.stderr.log`. Common causes are an expired login, an exhausted usage limit, or a model name that is unavailable for the account. Rerun with the same `--workdir` once Codex works. |
+| A standard-problem campaign stops with exit code `5` | Check that `https://qiqc-op.com/api/index.json` loads. If every unsolved problem has been attempted, start a new campaign directory. |
 | The agent claims completion but lean1 retries | Read `.lean1/verification_feedback.txt` and the corresponding `.lean1/run-*.lean.log`. See the [verification guide](verification.md). |
 | An attempt ends without a solution | Inspect `codex_last_message.md`, `codex_last_output.json`, and `.lean1/run-*.stderr.log`. Continue with the same problem and `--workdir`, or adjust the attempt limit. |

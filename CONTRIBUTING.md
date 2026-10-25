@@ -24,12 +24,22 @@ For an editable installation on the shell's tool path, use `uv tool install --ed
 | `src/lean1/cli.py` | Argument parsing and command setup. |
 | `src/lean1/problems.py` | Problem input detection, copying, and URL snapshots. |
 | `src/lean1/lean.py` | Local Lean discovery and installation. |
-| `src/lean1/runner.py` | Codex executions, retries, logs, and completion handling. |
+| `src/lean1/runner.py` | Research attempts, retries, logs, and completion handling. |
+| `src/lean1/codex.py` | Codex command construction, execution, event parsing, and timeouts. |
+| `src/lean1/config.py` | Shared run and health-check configuration. |
+| `src/lean1/health.py` | The Codex health check before every execution. |
+| `src/lean1/issues.py` | Exit codes and the emails sent for every issue stop. |
+| `src/lean1/qiqcop.py` | Validated selection of unsolved problems from qiqc-op.com. |
+| `src/lean1/campaign.py` | The `--standard-problem` loop, its state, and resumption. |
+| `src/lean1/review.py` | The independent review agent and verdict validation. |
+| `src/lean1/publication.py` | The publication agent and release package checks. |
 | `src/lean1/control.py` | Active workspace registration and graceful stop requests. |
 | `src/lean1/verification.py` | Manifest validation, Lean compilation, and axiom checks. |
 | `src/lean1/notify.py` | Local mail and SMTP notifications. |
 | `src/lean1/prompt.txt` and `prompt.txt` | Matching copies of the bundled research template. |
-| `tests/test_runner.py` | Unit tests and simulated command-line pipeline tests. |
+| `src/lean1/review_prompt.txt`, `src/lean1/publish_prompt.txt`, `src/lean1/standard_problem.txt` | Review and publication instructions, and the one-line standard problem template. |
+| `tests/lean1/test_<module>.py` | Tests for `src/lean1/<module>.py`; `test_cli.py` holds simulated end-to-end runs. |
+| `tests/lean1/support.py` | Simulated Codex, Lean, Lake, and mail executables, and a local stand-in for qiqc-op.com. |
 | `docs/` | Configuration and proof-verification guides. |
 
 ## Validation
@@ -37,13 +47,13 @@ For an editable installation on the shell's tool path, use `uv tool install --ed
 Run the test suite and build both distribution formats:
 
 ```sh
-uv run python -m unittest discover -s tests -v
+uv run python -m unittest discover -s tests -t . -v
 uv build
 ```
 
-The tests use temporary workspaces, simulated Codex/Lean/Lake/mail executables, and mocked SMTP and download calls. They do not require credentials, send real email, install Lean, or start paid agent runs. They test orchestration and validation behavior; a live Codex and Lean integration still requires a separately configured environment.
+The tests use temporary workspaces, simulated Codex/Lean/Lake/mail executables, a local HTTP stand-in for qiqc-op.com, and mocked SMTP and download calls. They do not require credentials, send real email, install Lean, or start paid agent runs. They test orchestration and validation behavior; a live Codex and Lean integration still requires a separately configured environment.
 
-To run the tests without installing the package, use `PYTHONPATH=src python -m unittest discover -s tests -v` in a POSIX shell.
+The test tree mirrors `src/`: tests for `src/lean1/x.py` belong in `tests/lean1/test_x.py`. The `-t .` option makes `tests` the top-level package, so the test directory `tests/lean1` cannot shadow the `lean1` package. `LEAN1_LIVE_TESTS=1` adds a check of problem selection against the real qiqc-op.com, and `LEAN1_TEST_CLI=/path/to/lean1` runs the command-line tests against an installed executable.
 
 Keep the top-level and packaged prompt files identical when editing research instructions. The test suite checks their equality and verifies that supplied problem text is substituted literally. Preserve the completion-marker format and verification manifest contract described in the [verification guide](docs/verification.md).
 

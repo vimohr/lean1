@@ -102,6 +102,14 @@ def request_stop(workdir: Path | None = None) -> Path:
                 candidate = _read_run(path)
                 if candidate and candidate.is_running() and _read_run(candidate.state / "active_run.json") == candidate:
                     candidates[candidate.workdir] = candidate
+            # A problem campaign registers its directory and the nested problem
+            # workspace; stopping the campaign also stops the nested run.
+            outer = [
+                candidate for candidate in candidates.values()
+                if all(path.is_relative_to(candidate.workdir) for path in candidates)
+            ]
+            if len(candidates) > 1 and len(outer) == 1:
+                candidates = {outer[0].workdir: outer[0]}
             if len(candidates) > 1:
                 workspaces = "\n".join(f"  {path}" for path in sorted(candidates))
                 raise RunnerError(f"Multiple active lean1 runs; select one with 'lean1 stop --workdir PATH':\n{workspaces}")

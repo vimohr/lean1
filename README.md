@@ -2,9 +2,9 @@
 
 Run a Codex agent on a mathematical problem, retry incomplete attempts, and check the resulting Lean proofs before accepting completion.
 
-lean1 accepts problem statements as text, URLs, or files. Each run uses a persistent workspace containing the research report, proof sources, and logs. Email notifications report progress and verified completion.
+lean1 accepts problem statements as text, URLs, or files. It can also work through random unsolved problems from the [QIQCOP Zoo](https://qiqc-op.com/), with an independent review of each solution and a prepared publication package. Each run uses a persistent workspace containing the research report, proof sources, and logs. Email notifications report progress, verified completion, and every issue that stops a run.
 
-[Configuration](docs/configuration.md) · [Proof verification](docs/verification.md) · [Contributing](CONTRIBUTING.md)
+[Configuration](docs/configuration.md) · [Proof verification](docs/verification.md) · [Standard problems](docs/standard-problems.md) · [Contributing](CONTRIBUTING.md)
 
 ## Requirements
 
@@ -52,6 +52,8 @@ lean1 \
 
 The example allows three Codex attempts and emails only after verified completion. **Without `--max-runs`, attempts continue until completion, interruption, or a failsafe stop.** Each attempt consumes Codex usage. Codex state is saved in the workspace's `.codex/` directory, seeded with existing authentication and configuration. `lean1 stop` lets the current attempt finish before stopping; `Ctrl+C` interrupts the agent and preserves the workspace.
 
+Before every Codex execution, lean1 runs a short [health check](docs/configuration.md#codex-health-check): Codex must start and give a fixed reply. If it fails, lean1 pauses, emails you, and exits with code `4`; rerun the same command with the same `--workdir` to resume.
+
 A failsafe stops retries if 10 attempts fail within a rolling 60-second window. An attempt counts as failed when Codex exits with an error or produces no final response. Successful attempts that need more research or Lean verification can continue normally. The stop reason is saved in `codex_last_output.json` and the supervisor log.
 
 lean1 automates research attempts and proof checks. Difficult or open problems can remain unresolved, even after many attempts.
@@ -77,6 +79,26 @@ lean1 --email researcher@example.com --problem-file - --max-runs 3 < problem.md
 ```
 
 Use an explicit input option when a statement could be mistaken for a path or URL. Text inputs are included in the agent prompt. Documents are copied into the workspace for inspection. For URLs, lean1 attempts to save a snapshot and also passes the link to the agent, since downloaded excerpts can omit equations, attachments, or other context. A failed download leaves the link available for agent browsing.
+
+## Standard problems from the QIQCOP Zoo
+
+`--standard-problem` replaces the problem input with a campaign over the unsolved problems of [qiqc-op.com](https://qiqc-op.com/):
+
+```sh
+lean1 \
+  --email researcher@example.com \
+  --standard-problem \
+  --max-runs 20 \
+  --author-name "Ada Lovelace" --author-orcid 0000-0002-1825-0097
+```
+
+lean1 picks a random unsolved problem from the site's JSON API, confirms it against the problem's own record and page, and gives the agent a one-line statement:
+
+```text
+Solve this problem https://qiqc-op.com/problem/op_f1e5a1cad168b38b/. Make no mistakes.
+```
+
+When the Lean proofs pass verification, a new review agent checks whether they resolve the problem exactly as stated on the website. A rejection becomes feedback for the next attempt. An accepted solution is packaged by a further agent as a manuscript in the style of [this Zenodo preprint](https://zenodo.org/records/23215121) and a GitHub-ready repository in the style of [superchannel-amortization](https://github.com/vimohr/superchannel-amortization), committed locally in `release/` and never pushed. lean1 then selects the next unsolved problem. `--max-runs` applies per problem; at the limit, lean1 moves on. Any issue, such as a failed health check or an unreachable website, stops the campaign and sends an email. See [Standard problems](docs/standard-problems.md) for the selection checks, stages, layout, and resumption.
 
 ## Continue work in a workspace
 
@@ -137,7 +159,7 @@ For authenticated SMTP, also supply `LEAN1_SMTP_PASSWORD` through the shell envi
 
 To use local delivery, install and configure a `mail` client and a mail transfer agent. Finding the executable only confirms that the command is available; the mail service must also be able to deliver messages.
 
-`--notify all` sends an email after every attempt and is the default. `--notify complete` sends only after accepted completion. Each message includes the final agent response, verification outcome, duration, and workspace path. A copy is saved under `.lean1/notifications/` before delivery. Successful submission to a mail server does not confirm inbox receipt.
+`--notify all` sends an email after every attempt and is the default. `--notify complete` sends only after accepted completion. With either setting, lean1 also emails whenever it stops because of an issue: a failed health check, the rapid-failure failsafe, a problem website failure, a failed review or publication stage, or an unexpected error. Each message includes the final agent response, verification outcome, duration, and workspace path. A copy is saved under `.lean1/notifications/` before delivery. Successful submission to a mail server does not confirm inbox receipt.
 
 ## How completion is checked
 
@@ -175,7 +197,8 @@ All paths below are relative to the run workspace:
 | `.lean1/run-*.events.jsonl` | Full Codex event streams. |
 | `.lean1/run-*.stderr.log` and `.lean1/run-*.lean.log` | Agent diagnostics and Lean verification logs. |
 | `.lean1/verification_feedback.txt` | Feedback carried into the next attempt after an unsuccessful run. |
-| `.lean1/notifications/*.eml` | Saved notification messages. |
+| `.lean1/notifications/*.eml` | Saved notification messages, including `issue-*.eml` for stops caused by issues. |
+| `.lean1/health/` and `.lean1/last_issue.json` | Latest Codex health check logs and the reason for the latest issue stop. |
 | `.codex/` | Workspace-local Codex authentication, configuration, sessions, logs, and caches. |
 
 For model selection, retry delays, toolchain discovery, network settings, troubleshooting, and exit codes, see the [configuration reference](docs/configuration.md). Use `lean1 --help` and `lean1 setup --help` for the full command-line interface.
@@ -184,11 +207,11 @@ For model selection, retry delays, toolchain discovery, network settings, troubl
 
 ```sh
 uv sync --locked
-uv run python -m unittest discover -s tests -v
+uv run python -m unittest discover -s tests -t . -v
 uv build
 ```
 
-The tests use simulated Codex, Lean, Lake, and mail executables, plus mocked SMTP delivery. They require no account credentials or live services. See [CONTRIBUTING.md](CONTRIBUTING.md) for the project layout and contribution workflow. Report reproducible problems through [GitHub issues](https://github.com/vimohr/lean1/issues).
+The tests use simulated Codex, Lean, Lake, and mail executables, a local stand-in for qiqc-op.com, and mocked SMTP delivery. They require no account credentials or live services. Set `LEAN1_LIVE_TESTS=1` to also check problem selection against the real website. See [CONTRIBUTING.md](CONTRIBUTING.md) for the project layout and contribution workflow. Report reproducible problems through [GitHub issues](https://github.com/vimohr/lean1/issues).
 
 ## License
 

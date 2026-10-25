@@ -10,6 +10,7 @@ from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+from . import __version__
 from .common import RunnerError, atomic_write, write_json
 
 MAX_DOWNLOAD = 10 * 1024 * 1024
@@ -133,7 +134,7 @@ def prepare_problem(problem: Problem, workdir: Path) -> str:
             "images, attachments, or content rendered by JavaScript."
         )
         try:
-            request = Request(problem.source, headers={"User-Agent": "lean1/0.2"})
+            request = Request(problem.source, headers={"User-Agent": f"lean1/{__version__}"})
             with urlopen(request, timeout=30) as response:
                 data = response.read(MAX_DOWNLOAD + 1)
                 media_type = response.headers.get_content_type()

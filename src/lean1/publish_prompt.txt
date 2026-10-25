@@ -1,0 +1,71 @@
+You are preparing a publication package for a solved open problem. A research agent solved the problem below, the Python supervisor verified the Lean proofs, and an independent review agent accepted the solution as resolving the problem exactly as stated on the website. Your task is to write a preprint manuscript and a GitHub-ready source repository. Do not change the mathematics or the proofs.
+
+## The solved problem
+
+- Problem page: {{PROBLEM_URL}}
+- Machine-readable record: {{PROBLEM_JSON_URL}} (saved copy: {{RECORD_FILE}})
+- Problem ID: {{PROBLEM_ID}}
+- Title on the website: {{PROBLEM_TITLE}}
+- Accepted review: {{REVIEW_FILE}}
+
+The research workspace (the current directory) contains result.md, lean_verification.json, the Lean sources, and the supervisor logs in .lean1/. Read them, the review, and the problem page before writing.
+
+## Style references
+
+Model the package on these two examples, and open them before you start:
+
+1. Manuscript: https://zenodo.org/records/23215121 (the PDF is at https://zenodo.org/api/records/23215121/files/manuscript.pdf/content). Follow its structure and tone: a title stating the result, author block with affiliation and ORCID, date, DOI line, abstract, "Introduction and scope", "Definitions and the main theorem", sections with the conventional proof, a section mapping each mathematical step to Lean modules and declarations with the verification procedure and trust boundaries, "Contributions, AI disclosure, and availability", and references.
+2. Repository: https://github.com/vimohr/superchannel-amortization. Follow its layout, README structure, and documentation set.
+
+## Author and provenance
+
+{{AUTHOR}}
+
+Date: {{DATE}}
+
+The research, proofs, and manuscript were produced by OpenAI Codex agents ({{MODEL}}) supervised by lean1 (https://github.com/vimohr/lean1), which selected the problem at random from the unsolved problems of the Quantum Information and Quantum Computation Open Problem Zoo (https://qiqc-op.com/). An independent Codex review agent checked the solution against the website's statement. State these roles accurately in the manuscript, PROVENANCE.md, and the metadata. Do not attribute work to people or models that did not do it, and do not claim human review that has not happened.
+
+## Output
+
+Create the repository in {{RELEASE_DIR}}/ (inside the current directory). Its intended public name is {{REPOSITORY_NAME}}. It must contain at least:
+
+| Path | Content |
+| --- | --- |
+| README.md | Result statement and scope, links to the manuscript, VERIFY.md, and HUMAN-CHECK.md, the main formal theorem with its fully qualified name and declaration, a table mapping what to inspect to source files, verification and trust boundaries, build and verify commands, manuscript and contents table, provenance and AI disclosure, availability, license. |
+| manuscript.tex, references.bib, manuscript.bbl, manuscript.pdf | The preprint. Compile it with latexmk or pdflatex and BibTeX (or tectonic if those are unavailable). The PDF must build without errors and contain no unresolved references. |
+| artifact/lean/ | The complete Lean proof closure as a Lake project: every project source file the listed theorems need, with original module names and bytes preserved, plus lean-toolchain, lakefile, and lake-manifest.json if dependencies are used. It must build from a fresh clone. |
+| artifact/source_manifest.json | SHA-256 hash, path, and imports of every project Lean module, and the topological build order. |
+| artifact/ReadStatement.lean | Prints the definitions and theorem statements for human inspection. |
+| artifact/ProofAudit.lean | Checks each main theorem's exact type and prints its axioms. |
+| verify_artifact.py | Compiles all project modules into a new output directory, checks the exact theorem types, enforces the axiom allowlist propext, Classical.choice, Quot.sound, checks source hashes against the manifest, prints PASS or FAIL, and writes result.json with "status": "PASS" or "FAIL". |
+| verification/{{DATE}}-release/ | The output of running verify_artifact.py on this package, including result.json with "status": "PASS", and the manuscript build log. Add verification/README.md describing the records. |
+| VERIFY.md | How to reproduce the formal checks, interpret the outcome, inspect the statement in Lean, and check the correspondence with the manuscript. |
+| HUMAN-CHECK.md | A guide for a human checking that Lean proved the intended statement: the exact theorem and its assumptions, the definitions behind the names, comparison with the website's conventions, axioms, and how much work this involves. |
+| PROVENANCE.md | Research and proof provenance, including the lean1 run logs it is based on. |
+| REVIEW.txt | A summary of the independent review and its verdict. |
+| RELEASE_NOTES.md, publication-plan.md, preparation-status.txt | Release notes for v1.0.0, steps that remain before public submission (specialist review, novelty search, DOI assignment), and the current preparation status. |
+| comparison.csv, literature.json | Comparison with prior results and a record of the bounded literature search you performed. |
+| LICENSE, RIGHTS.txt | MIT License with the author's copyright, and the scope of the license; external dependencies keep their licenses. |
+| CITATION.cff, .zenodo.json | Citation and Zenodo metadata. Leave DOI fields out or mark them as pending; never invent a DOI. |
+| .gitignore, .gitattributes, .github/workflows/lean.yml | Ignore build output (.lake/, *.olean, LaTeX intermediates); pin line endings; CI that checks source hashes, builds the theorem, and enforces the axiom allowlist. |
+| release-manifest.json | SHA-256 hashes of all release files except itself. |
+
+## Rules
+
+- Copy proofs; never edit them. The theorems in artifact/lean must be the ones the supervisor verified. If a proof needs a change to build in the new layout, stop and explain why in your final response instead of changing it.
+- State the result exactly as proved. Distinguish formally verified claims, conventional arguments in the manuscript, and cited background. State the scope and what is not proved.
+- Do not invent references, results, DOIs, or reviews. Every citation must be a real source you checked.
+- Do not copy credentials or agent state: the package must not contain .codex/, auth.json, .lean1/, .env files, or build outputs.
+- Initialize a Git repository in {{RELEASE_DIR}}/ and commit every release file on a branch named main with the commit message "feat: initial release". Do not add a remote, push, create a GitHub repository, upload to Zenodo, or publish anything. A person will review and publish the package.
+- Work only inside {{RELEASE_DIR}}/, apart from reading the workspace.
+
+Lean: {{LEAN_COMMAND}}
+Lake: {{LAKE_COMMAND}}
+{{FEEDBACK}}
+## Completion
+
+Before finishing, run verify_artifact.py, build the manuscript, check that `git status` in {{RELEASE_DIR}}/ is clean, and check every row of the table above.
+
+Only when everything is complete, end your final response with this exact line:
+
+PUBLICATION_STATUS: READY
