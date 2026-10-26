@@ -54,6 +54,8 @@ Create the repository in {{RELEASE_DIR}}/ (inside the current directory). Its in
 
 - Copy proofs; never edit them. The theorems in artifact/lean must be the ones the supervisor verified. If a proof needs a change to build in the new layout, stop and explain why in your final response instead of changing it.
 - State the result exactly as proved. Distinguish formally verified claims, conventional arguments in the manuscript, and cited background. State the scope and what is not proved.
+- The manuscript is about solving a problem that had not been solved before. Its title, abstract, introduction, and contribution statement focus on the problem, why it was open, the new result, and its proof. The Lean verification supports the result: describe it in its own section and in the verification statement, state exactly which theorems it checks, and do not make it the main topic or the main novelty of the manuscript.
+- Attribute every definition, result, lemma, construction, and proof technique taken from prior work at the point of use, using the "Prior work" section and the attribution labels in result.md and the sources themselves. Claim as new only what is new, and do not present any known result, or part of one, as new.
 - Do not invent references, results, DOIs, or reviews. Every citation must be a real source you checked.
 - Do not copy credentials or agent state: the package must not contain .codex/, auth.json, .lean1/, .env files, or build outputs.
 - Initialize a Git repository in {{RELEASE_DIR}}/ and commit every release file on a branch named main with the commit message "feat: initial release". Do not add a remote, push, create a GitHub repository, upload to Zenodo, or publish anything. A person will review and publish the package.

@@ -90,6 +90,28 @@ if name == "codex":
             sys.exit(1)
         message("LEAN1_HEALTH_CHECK_OK")
         sys.exit(0)
+    if "AUDIT_VERDICT" in prompt:
+        count = counter("audit")
+        (root / f"audit-prompt-{count}.txt").write_text(prompt)
+        mode = os.environ.get("LEAN1_TEST_AUDIT", "pass")
+        if mode == "tamper":
+            Path("release/README.md").write_text("# Edited by the auditor\n")
+        if mode == "garbage":
+            message("I could not decide.")
+            sys.exit(0)
+        verdict = {"revise-once": "revise" if count == 1 else "pass"}.get(mode, mode)
+        report = re.search(r"Write your verdict to (\S+) as a JSON object", prompt).group(1)
+        problem_id = re.search(r"Problem ID: (op_[0-9a-f]+)", prompt).group(1)
+        Path(report).parent.mkdir(parents=True, exist_ok=True)
+        Path(report).write_text(json.dumps({
+            "problem_id": problem_id, "verdict": "pass" if verdict == "tamper" else verdict,
+            "summary": "Checked attribution, references, and prior work.",
+            "issues": [] if verdict in {"pass", "tamper"} else ["Lemma 2 is due to Doe (2025) but is not cited."],
+            "prior_work": ["Doe, J. A full answer. arXiv:2501.00001 (2025)."] if verdict != "pass" else [],
+            "searches": ["arXiv: problem title"],
+        }))
+        message("Audit complete.\nAUDIT_VERDICT: " + ("PASS" if verdict == "tamper" else verdict.upper()))
+        sys.exit(0)
     if "REVIEW_VERDICT" in prompt:
         count = counter("review")
         (root / f"review-prompt-{count}.txt").write_text(prompt)
@@ -177,6 +199,10 @@ if name == "codex":
         source = "namespace Solution\ntheorem answer : 1 = 1 := by sorry\nend Solution\n"
     if mode == "custom-axiom":
         source = "axiom assumed : False\nnamespace Solution\ntheorem answer : False := assumed\nend Solution\n"
+    if mode == "prior-solved":
+        Path("result.md").write_text("## Prior work\n\nPrior resolution: COMPLETE\n\nDoe, J. A full answer. arXiv:2501.00001.\n")
+        message("An existing paper resolves the problem.")
+        sys.exit(0)
     Path("Solution.lean").write_text(source)
     Path("result.md").write_text("The mathematical result and proof.\n")
     if mode != "no-manifest":

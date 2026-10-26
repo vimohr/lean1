@@ -33,11 +33,13 @@ For an editable installation on the shell's tool path, use `uv tool install --ed
 | `src/lean1/campaign.py` | The `--standard-problem` loop, its state, and resumption. |
 | `src/lean1/review.py` | The independent review agent and verdict validation. |
 | `src/lean1/publication.py` | The publication agent and release package checks. |
+| `src/lean1/audit.py` | The release audit agent: prior work, attribution, and mistakes. |
+| `src/lean1/prior.py` | Reading the prior-work verdict in `result.md`. |
 | `src/lean1/control.py` | Active workspace registration and graceful stop requests. |
 | `src/lean1/verification.py` | Manifest validation, Lean compilation, and axiom checks. |
 | `src/lean1/notify.py` | Local mail and SMTP notifications. |
 | `src/lean1/prompt.txt` and `prompt.txt` | Matching copies of the bundled research template. |
-| `src/lean1/review_prompt.txt`, `src/lean1/publish_prompt.txt`, `src/lean1/standard_problem.txt` | Review and publication instructions, and the one-line standard problem template. |
+| `src/lean1/review_prompt.txt`, `src/lean1/publish_prompt.txt`, `src/lean1/audit_prompt.txt`, `src/lean1/standard_problem.txt` | Review, publication, and audit instructions, and the one-line standard problem template. |
 | `tests/lean1/test_<module>.py` | Tests for `src/lean1/<module>.py`; `test_cli.py` holds simulated end-to-end runs. |
 | `tests/lean1/support.py` | Simulated Codex, Lean, Lake, and mail executables, and a local stand-in for qiqc-op.com. |
 | `docs/` | Configuration and proof-verification guides. |

@@ -7,13 +7,15 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
+import unittest.mock
 from unittest.mock import patch
 
 from .support import REPO
 
 from lean1.lean import LeanTools
 from lean1.notify import EmailConfig
-from lean1.runner import RunConfig, is_complete, load_prompt, supervise
+from lean1.config import Acceptance
+from lean1.runner import PRIOR_SOLUTION_NOTE, RunConfig, is_complete, load_prompt, supervise
 
 
 class RetryFailsafeTests(unittest.TestCase):
@@ -28,8 +30,11 @@ class RetryFailsafeTests(unittest.TestCase):
             EmailConfig("me@example.org", "mail"), restart_delay=0, notify="complete",
         )
 
-    def run_attempts(self, attempts, *, max_runs=0, notify="complete", started=0):
-        """Each attempt supplies its runtime, exit code, message, and completion."""
+    def run_attempts(self, attempts, *, max_runs=0, notify="complete", started=0, result=None, **options):
+        """Each attempt supplies its runtime, exit code, message, and completion.
+
+        `result`, if given, is the result.md text every attempt writes.
+        """
         pending = iter(attempts)
         now = started
 
@@ -37,6 +42,8 @@ class RetryFailsafeTests(unittest.TestCase):
             nonlocal now
             duration, exit_code, message, complete = next(pending)
             now += duration
+            if result is not None:
+                (config.workdir / "result.md").write_text(result)
             return {
                 "run_number": run_number, "exit_code": exit_code,
                 "duration_seconds": duration, "final_message": message,
@@ -45,7 +52,7 @@ class RetryFailsafeTests(unittest.TestCase):
             }
 
         console = io.StringIO()
-        config = replace(self.config, max_runs=max_runs, notify=notify)
+        config = replace(self.config, max_runs=max_runs, notify=notify, **options)
         with patch("lean1.runner.run_codex", side_effect=run) as codex, patch("lean1.runner.time.monotonic", side_effect=lambda: now), patch.object(EmailConfig, "send", return_value=None) as email, contextlib.redirect_stdout(console):
             result = supervise(config)
         output = json.loads((config.workdir / "codex_last_output.json").read_text())
@@ -123,6 +130,41 @@ class RetryFailsafeTests(unittest.TestCase):
         self.assertTrue(output["task_complete"])
         self.assertNotIn("stop_reason", output)
         self.assertIn("completed task", email.call_args.args[2])
+
+
+class PriorSolutionTests(RetryFailsafeTests):
+    """Stopping when result.md reports that an existing source resolves the problem."""
+
+    SOLVED = "## Prior work\n\nPrior resolution: COMPLETE\n\nDoe, J. A full answer. arXiv:2501.00001.\n"
+
+    def test_reported_prior_solution_stops_without_review(self):
+        review = unittest.mock.Mock(return_value=Acceptance(True, "accepted"))
+        result, output, console, codex, email = self.run_attempts(
+            [(5, 0, "Solved.\nTASK_STATUS: COMPLETE\nLEAN_VERIFIED: YES", True)] * 3,
+            result=self.SOLVED, stop_on_prior_solution=True, acceptance=review,
+        )
+        self.assertEqual(result, 0)
+        self.assertEqual(codex.call_count, 1)
+        review.assert_not_called()
+        self.assertEqual(output["prior_work"]["status"], "COMPLETE")
+        self.assertIn("arXiv:2501.00001", output["prior_work"]["section"])
+        self.assertIn("existing source completely resolves", output["stop_reason"])
+        self.assertIn("already resolves the problem", console)
+        email.assert_not_called()
+
+    def test_partial_or_disabled_check_keeps_working(self):
+        for result, enabled in ((self.SOLVED.replace("COMPLETE", "PARTIAL"), True), (self.SOLVED, False)):
+            with self.subTest(enabled=enabled):
+                code, output, _, codex, _ = self.run_attempts(
+                    [(5, 0, "Still working.", False)] * 2, max_runs=2, result=result, stop_on_prior_solution=enabled,
+                )
+                self.assertEqual(code, 1)
+                self.assertEqual(codex.call_count, 2)
+                self.assertNotIn("prior_work", output)
+
+    def test_prompt_note_appears_only_when_enabled(self):
+        self.assertNotIn(PRIOR_SOLUTION_NOTE.strip(), load_prompt(self.config))
+        self.assertIn(PRIOR_SOLUTION_NOTE.strip(), load_prompt(replace(self.config, stop_on_prior_solution=True)))
 
 
 class PromptTests(unittest.TestCase):

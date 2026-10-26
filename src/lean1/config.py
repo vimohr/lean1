@@ -48,6 +48,8 @@ class RunConfig:
     acceptance: Callable[["RunConfig", dict[str, Any]], Acceptance] | None = field(default=None, compare=False)
     # An outer supervisor (a problem campaign) may request a stop.
     external_stop: Callable[[], bool] | None = field(default=None, compare=False)
+    # Stop when result.md reports that an existing source already resolves the problem.
+    stop_on_prior_solution: bool = False
 
     def agent_command(self) -> list[str]:
         return codex_command(

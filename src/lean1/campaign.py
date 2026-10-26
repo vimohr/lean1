@@ -2,8 +2,11 @@
 
 Each problem gets its own workspace under <campaign>/problems/<id>/. A
 Lean-verified solution is checked by an independent review agent; an accepted
-solution is then packaged as a manuscript and a local Git repository before
-the next problem is selected. Any issue stops the campaign with an email.
+solution is then packaged as a manuscript and a local Git repository, and an
+independent audit checks the package for mistakes, attribution, and prior
+solutions before the next problem is selected. A problem that an existing source
+already resolves is recorded as solved elsewhere and skipped. Any issue stops the
+campaign with an email.
 """
 
 import hashlib
@@ -16,17 +19,20 @@ from pathlib import Path
 from typing import Any
 
 from .common import RunnerError, atomic_write, log, write_json
+from .audit import AuditError, audit_release, revision_feedback
 from .config import RunConfig
 from .control import ActiveRun, active_run
 from .issues import (
     EXIT_CONFIGURATION, EXIT_STOPPED, ReportedError, StopRequested, SupervisorIssue, issue_body, report_issue,
 )
+from .prior import RESULT_FILE, PriorWork, read_prior_work
 from .publication import Author, publish_solution
 from .qiqcop import ZooClient, ZooProblem, pick_unsolved, standard_problem_text
 from .review import review_solution
 from .runner import supervise_outcome
 
 STATE_FILE = "campaign.json"
+AUDIT_ROUNDS = 3
 ACTIVE_STATUSES = ("researching", "accepted")
 
 
@@ -151,21 +157,46 @@ class Campaign:
         ))
         return entry
 
+    def record_solved_elsewhere(self, entry: dict[str, Any], agent: str, report: Path, details: str) -> None:
+        self.state.update(entry, status="solved_elsewhere", prior_work=str(report))
+        log(self.root, f"{entry['id']}: the {agent} agent reports that an existing source already resolves the problem")
+        print(f"An existing source already resolves {entry['id']}; selecting another problem.", flush=True)
+        self.notify(entry, f"Already solved elsewhere: {entry['title']}", (
+            f"The {agent} agent reports that an existing source completely resolves this problem, "
+            "although the website lists it as unsolved. Work on it stopped and nothing will be published. "
+            "Check the cited sources; if they hold, the website entry may be out of date.\n\n"
+            f"Problem: {entry['title']}\nURL: {entry['url']}\nReport: {report}\n\n{details}\n"
+        ), always=True)
+
+    def record_prior_solution(self, entry: dict[str, Any], prior: PriorWork) -> None:
+        self.record_solved_elsewhere(entry, "research", Path(entry["workspace"]) / RESULT_FILE, prior.section)
+
     def research(self, entry: dict[str, Any]) -> int | None:
         """Return an exit code to stop the campaign, or None to continue."""
         workspace = Path(entry["workspace"])
         problem = _problem(entry)
+        # An interrupted attempt may already have recorded an existing solution.
+        prior = read_prior_work(workspace)
+        if prior and prior.solved:
+            self.record_prior_solution(entry, prior)
+            return None
         record_file = workspace / ".lean1" / "inputs" / "qiqcop-record.json"
         text = (workspace / ".lean1" / "inputs" / "standard_problem.txt").read_text(encoding="utf-8").strip()
         run = replace(
             self.config.run, workdir=workspace, problem=text, label=problem.id,
             acceptance=partial(review_solution, problem=problem, record_file=record_file, stop_requested=self.stop_requested),
-            external_stop=self.stop_requested,
+            external_stop=self.stop_requested, stop_on_prior_solution=True,
         )
         outcome = supervise_outcome(run)
         log(self.root, f"{problem.id}: research ended with {outcome.status} (exit {outcome.code})")
         if outcome.status == "complete":
             self.state.update(entry, status="accepted", review=_review_report(workspace))
+            return None
+        if outcome.status == "solved_elsewhere":
+            prior = read_prior_work(workspace)
+            if prior is None or not prior.solved:
+                raise RunnerError(f"{workspace / RESULT_FILE} no longer reports an existing complete solution.")
+            self.record_prior_solution(entry, prior)
             return None
         if outcome.status == "limit":
             self.state.update(entry, status="exhausted")
@@ -175,22 +206,63 @@ class Campaign:
         return outcome.code
 
     def publish(self, entry: dict[str, Any]) -> None:
+        """Prepare the package, then audit it; audit defects go back to the publication agent."""
         workspace = Path(entry["workspace"])
         problem = _problem(entry)
         run = replace(self.config.run, workdir=workspace, label=problem.id, external_stop=self.stop_requested)
-        release = publish_solution(
-            run, problem=problem, record_file=workspace / ".lean1" / "inputs" / "qiqcop-record.json",
-            review_file=Path(entry["review"]), author=self.config.author, stop_requested=self.stop_requested,
+        record_file = workspace / ".lean1" / "inputs" / "qiqcop-record.json"
+        review_file = Path(entry["review"])
+        feedback = ""
+        rounds: list[str] = []
+        for round_number in range(1, AUDIT_ROUNDS + 1):
+            release = publish_solution(
+                run, problem=problem, record_file=record_file, review_file=review_file,
+                author=self.config.author, stop_requested=self.stop_requested, feedback=feedback,
+            )
+            log(self.root, f"{problem.id}: publication package ready at {release}; auditing")
+            audit = audit_release(
+                run, problem=problem, record_file=record_file, review_file=review_file,
+                round_number=round_number, stop_requested=self.stop_requested,
+            )
+            if audit.verdict == "pass":
+                self.record_published(entry, release, audit.report_file)
+                return
+            if audit.verdict == "solved_elsewhere":
+                self.record_solved_elsewhere(entry, "audit", audit.report_file, audit.describe())
+                return
+            if audit.verdict == "reject":
+                self.record_audit_rejection(entry, audit.report_file, audit.describe())
+                return
+            feedback = revision_feedback(audit)
+            rounds.append(f"round {round_number}:\n{audit.describe()}")
+            log(self.root, f"{problem.id}: audit round {round_number} requested revisions")
+        raise AuditError(
+            f"the package for {problem.id} still has defects after {AUDIT_ROUNDS} audit rounds",
+            "\n\n".join(rounds) + f"\nRelease directory: {workspace / 'release'}",
         )
-        self.state.update(entry, status="published", release=str(release))
-        log(self.root, f"{problem.id}: publication package ready at {release}")
-        self.notify(entry, f"Solved and packaged: {problem.title}", (
-            "A Lean-verified solution passed independent review, and its publication package is ready "
-            "for human inspection.\n\n"
-            f"Problem: {problem.title}\nURL: {problem.url}\nWorkspace: {workspace}\n"
-            f"Review: {entry['review']}\nRelease repository: {release}\n\n"
+
+    def record_published(self, entry: dict[str, Any], release: Path, audit: Path) -> None:
+        self.state.update(entry, status="published", release=str(release), audit=str(audit))
+        log(self.root, f"{entry['id']}: publication package passed the audit")
+        self.notify(entry, f"Solved and packaged: {entry['title']}", (
+            "A Lean-verified solution passed independent review, and its publication package passed "
+            "an independent audit of mistakes, attribution, and prior work. It is ready for human inspection.\n\n"
+            f"Problem: {entry['title']}\nURL: {entry['url']}\nWorkspace: {entry['workspace']}\n"
+            f"Review: {entry['review']}\nAudit: {audit}\nRelease repository: {release}\n\n"
             "The repository has a local commit only. Inspect manuscript.pdf, HUMAN-CHECK.md, and "
             "VERIFY.md before publishing it on GitHub or Zenodo.\n"
+        ), always=True)
+
+    def record_audit_rejection(self, entry: dict[str, Any], audit: Path, details: str) -> None:
+        self.state.update(entry, status="audit_rejected", audit=str(audit))
+        log(self.root, f"{entry['id']}: the audit rejected the solution")
+        print(f"The audit rejected the solution of {entry['id']}; selecting another problem.", flush=True)
+        self.notify(entry, f"Audit rejected the solution: {entry['title']}", (
+            "The independent audit of the publication package found that the result itself is wrong or "
+            "does not answer the problem, although the review accepted it. Nothing will be published. "
+            "Check the audit before deciding whether to continue research on this problem.\n\n"
+            f"Problem: {entry['title']}\nURL: {entry['url']}\nWorkspace: {entry['workspace']}\n"
+            f"Review: {entry['review']}\n\n{details}"
         ), always=True)
 
     def run(self) -> int:

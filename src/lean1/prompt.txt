@@ -10,6 +10,8 @@ You have access to the current workspace, the supplied problem statement, and an
 
 Your goal is **not merely to understand or review existing work. Try to solve the following problem completely, with a rigorous mathematical result and Lean verification of the essential proof.**
 
+The contribution is the mathematics: solving a problem that has not been solved before. The Lean formalization is required, and it checks the argument; it is not itself the result or its novelty. Never present a formalization of known mathematics as a new result.
+
 ## The specific problem
 
 {{PROBLEM}}
@@ -23,6 +25,32 @@ Try to derive a complete and structurally meaningful solution. When the problem 
 Ideally, determine or constrain the relevant asymptotic dependence on the parameters. Investigate explicit quantitative bounds where applicable.
 
 Do not assume that suggested bounds, conjectures, or proposed conclusions are true. Attempt to disprove them as well. If the problem is false as stated, a rigorous counterexample or impossibility theorem is a valid solution, provided it answers the original question and its essential claims are verified in Lean.
+
+## Before any new research, check whether the problem is already solved
+
+A problem listed as open may already be solved elsewhere. Before you start your own proof attempts, search online for an existing resolution of the supplied problem, of an equivalent formulation, or of a special case that implies it.
+
+- Search arXiv, Google Scholar or Semantic Scholar, MathOverflow and Math StackExchange, journal and conference pages, and the authors' websites.
+- Search by the problem's name, its key definitions and terms, the people who posed it, and the papers it cites. Follow citations forward from the original sources to find later work.
+- Read the problem page itself, including any progress notes, comments, and linked references.
+
+Keep this search bounded; it is a check for an existing answer, not a literature survey.
+
+Record the outcome at the very top of result.md, before any other content, in a section titled "Prior work". It must contain:
+
+1. A single line of the form `Prior resolution: NONE FOUND`, `Prior resolution: PARTIAL`, or `Prior resolution: COMPLETE`.
+2. The searches you performed (queries and sites).
+3. Every relevant source with a full citation (authors, title, venue or arXiv identifier, year, link) and an exact statement of what it proves relative to the supplied problem.
+
+If an existing source completely resolves the problem as stated, say so explicitly in result.md and in your final response. Do not present that result, or any part of it, as new. Check whether the source really answers the exact problem, with the same definitions, hypotheses, and scope. If it does, the remaining task is an independent Lean verification of the known solution, attributed to its authors throughout; such a formalization is not a new result. If it does not, explain precisely where it falls short and continue with your own research.
+
+If an existing source resolves the problem partially, state what it proves and what remains open, and direct your research at the remaining part.
+
+## Attribution
+
+Whenever you use a definition, result, lemma, construction, proof idea, or counterexample from any external source, whether found in the initial search or later, cite the source in result.md at the point where you use it, with the exact theorem or section number in that source. Never reproduce a known argument without attribution, and never describe a known result as your own contribution.
+
+In result.md, label every lemma and theorem either as new or as taken from a cited source, and when a known argument is adapted, state what is changed. Before declaring completion, reread result.md and check every claim of novelty against the prior-work search.
 
 ## First reconstruct the existing result from the supplied sources
 
@@ -166,7 +194,7 @@ But clearly separate computational evidence from rigorous proof.
 
 Use the formal development where useful. When you obtain an important new lemma, formalize or mechanically check it using the available infrastructure.
 
-Search the external literature when necessary, but do not turn the task into a literature survey. Literature should support attempts at new proofs.
+Beyond the initial prior-work check, search the external literature when necessary, but do not turn the task into a literature survey. Literature should support attempts at new proofs, and every source you use must be cited.
 
 ## What counts as success
 
@@ -188,6 +216,7 @@ Negative results and counterexamples are valuable. Intermediate progress alone d
 
 Produce a research report in result.md containing, as applicable:
 
+0. The "Prior work" section described above, first in the file, including the `Prior resolution:` line and full citations.
 1. A precise statement of the supplied problem and a reconstruction of the relevant existing argument from its sources.
 2. A quantitative analysis identifying the sources of major blow-ups or obstructions.
 3. Every genuinely improved lemma you can prove.
@@ -258,6 +287,8 @@ Do not replace an essential theorem with a trivial theorem, assume the requested
 
 Before terminating, perform this completion check:
 
+- Prior-work search performed and reported at the top of result.md? YES/NO
+- Every external source used is cited, and no known result is presented as new? YES/NO
 - Mathematical result complete? YES/NO
 - Essential proof formalized in Lean? YES/NO
 - Lean actually executed? YES/NO

@@ -2,7 +2,7 @@
 
 Run a Codex agent on a mathematical problem, retry incomplete attempts, and check the resulting Lean proofs before accepting completion.
 
-lean1 accepts problem statements as text, URLs, or files. It can also work through random unsolved problems from the [QIQCOP Zoo](https://qiqc-op.com/), with an independent review of each solution and a prepared publication package. Each run uses a persistent workspace containing the research report, proof sources, and logs. Email notifications report progress, verified completion, and every issue that stops a run.
+lean1 accepts problem statements as text, URLs, or files. It can also work through random unsolved problems from the [QIQCOP Zoo](https://qiqc-op.com/), with an independent review of each solution, a prepared publication package, and an independent audit of that package for mistakes, attribution, and prior solutions. Each run uses a persistent workspace containing the research report, proof sources, and logs. Email notifications report progress, verified completion, and every issue that stops a run.
 
 [Configuration](docs/configuration.md) · [Proof verification](docs/verification.md) · [Standard problems](docs/standard-problems.md) · [Contributing](CONTRIBUTING.md)
 
@@ -98,7 +98,7 @@ lean1 picks a random unsolved problem from the site's JSON API, confirms it agai
 Solve this problem https://qiqc-op.com/problem/op_f1e5a1cad168b38b/. Make no mistakes.
 ```
 
-When the Lean proofs pass verification, a new review agent checks whether they resolve the problem exactly as stated on the website. A rejection becomes feedback for the next attempt. An accepted solution is packaged by a further agent as a manuscript in the style of [this Zenodo preprint](https://zenodo.org/records/23215121) and a GitHub-ready repository in the style of [superchannel-amortization](https://github.com/vimohr/superchannel-amortization), committed locally in `release/` and never pushed. lean1 then selects the next unsolved problem. `--max-runs` applies per problem; at the limit, lean1 moves on. Any issue, such as a failed health check or an unreachable website, stops the campaign and sends an email. See [Standard problems](docs/standard-problems.md) for the selection checks, stages, layout, and resumption.
+When the Lean proofs pass verification, a new review agent checks whether they resolve the problem exactly as stated on the website. A rejection becomes feedback for the next attempt. An accepted solution is packaged by a further agent as a manuscript in the style of [this Zenodo preprint](https://zenodo.org/records/23215121) and a GitHub-ready repository in the style of [superchannel-amortization](https://github.com/vimohr/superchannel-amortization), committed locally in `release/` and never pushed. An audit agent then searches for prior solutions and checks the package for mistakes and attribution; its defects go back to the publication agent. If the research or the audit agent finds that an existing source already resolves the problem, lean1 records it as solved elsewhere, emails you, and moves on. lean1 then selects the next unsolved problem. `--max-runs` applies per problem; at the limit, lean1 moves on. Any issue, such as a failed health check or an unreachable website, stops the campaign and sends an email. See [Standard problems](docs/standard-problems.md) for the selection checks, stages, layout, and resumption.
 
 ## Continue work in a workspace
 
@@ -159,11 +159,11 @@ For authenticated SMTP, also supply `LEAN1_SMTP_PASSWORD` through the shell envi
 
 To use local delivery, install and configure a `mail` client and a mail transfer agent. Finding the executable only confirms that the command is available; the mail service must also be able to deliver messages.
 
-`--notify all` sends an email after every attempt and is the default. `--notify complete` sends only after accepted completion. With either setting, lean1 also emails whenever it stops because of an issue: a failed health check, the rapid-failure failsafe, a problem website failure, a failed review or publication stage, or an unexpected error. Each message includes the final agent response, verification outcome, duration, and workspace path. A copy is saved under `.lean1/notifications/` before delivery. Successful submission to a mail server does not confirm inbox receipt.
+`--notify all` sends an email after every attempt and is the default. `--notify complete` sends only after accepted completion. With either setting, lean1 also emails whenever it stops because of an issue: a failed health check, the rapid-failure failsafe, a problem website failure, a failed review, publication, or audit stage, or an unexpected error. Each message includes the final agent response, verification outcome, duration, and workspace path. A copy is saved under `.lean1/notifications/` before delivery. Successful submission to a mail server does not confirm inbox receipt.
 
 ## How completion is checked
 
-The agent is instructed to write a research report in `result.md`, save the Lean proof sources, and list the essential theorems in `lean_verification.json`.
+The agent is instructed to search first for an existing solution, write a research report in `result.md` that opens with this prior-work search and cites every source it uses, save the Lean proof sources, and list the essential theorems in `lean_verification.json`. The mathematics is the contribution; the Lean proof checks the argument.
 
 The supervisor accepts completion only when:
 

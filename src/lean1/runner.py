@@ -18,16 +18,24 @@ from .issues import (
     EXIT_CONFIGURATION, EXIT_EMAIL_FAILED, EXIT_LIMIT, EXIT_STOPPED,
     ReportedError, StopRequested, SupervisorIssue, issue_body, report_issue,
 )
+from .prior import RESULT_FILE, read_prior_work
 from .verification import Verification, verify
 
 __all__ = [
-    "COMPLETE_MARKER", "LEAN_MARKER", "FAILURE_LIMIT", "FAILURE_WINDOW_SECONDS",
+    "COMPLETE_MARKER", "LEAN_MARKER", "FAILURE_LIMIT", "FAILURE_WINDOW_SECONDS", "PRIOR_SOLUTION_NOTE",
     "HealthCheckConfig", "Outcome", "RunConfig", "is_complete", "load_prompt",
     "render_template", "run_codex", "supervise", "supervise_outcome",
 ]
 
 COMPLETE_MARKER = "TASK_STATUS: COMPLETE"
 LEAN_MARKER = "LEAN_VERIFIED: YES"
+PRIOR_SOLUTION_NOTE = (
+    "\n\n## If the problem is already solved\n\n"
+    "If your prior-work search shows that an existing source completely resolves the exact problem, "
+    "do not formalize the known solution. Write result.md with the Prior work section and the line "
+    "`Prior resolution: COMPLETE`, then end your response. The supervisor will record the sources "
+    "and stop work on this problem."
+)
 FAILURE_LIMIT = 10
 FAILURE_WINDOW_SECONDS = 60
 
@@ -61,6 +69,8 @@ def load_prompt(config: RunConfig) -> str:
     feedback_file = config.workdir / ".lean1" / "verification_feedback.txt"
     if feedback_file.is_file():
         prompt += "\n\n## Feedback from the Python supervisor\n\n" + read_tail(feedback_file, 8000)
+    if config.stop_on_prior_solution:
+        prompt += PRIOR_SOLUTION_NOTE
     prompt += (
         "\n\nThis may be a continuation. Inspect existing solution files, research notes, "
         "codex_last_message.md, and .lean1/ verification logs before repeating work. "
@@ -189,9 +199,15 @@ def _supervise(config: RunConfig, control: ActiveRun) -> Outcome:
             run_number += 1
             attempt_started = time.monotonic()
             output = run_codex(config, next_number + run_number)
-            if output["task_complete"] and config.acceptance:
+            prior = read_prior_work(config.workdir) if config.stop_on_prior_solution else None
+            solved_elsewhere = bool(prior and prior.solved)
+            if solved_elsewhere:
+                output["prior_work"] = {"status": prior.status, "section": prior.section}
+                output["stop_reason"] = f"{RESULT_FILE} reports that an existing source completely resolves the problem."
+                log(config.workdir, f"run #{output['run_number']}: {output['stop_reason']}")
+            elif output["task_complete"] and config.acceptance:
                 _apply_acceptance(config, output)
-            complete = output["task_complete"]
+            complete = output["task_complete"] and not solved_elsewhere
             if output["exit_code"] or not (output["final_message"] or "").strip():
                 failed_attempts.append(attempt_started)
             now = time.monotonic()
@@ -210,7 +226,10 @@ def _supervise(config: RunConfig, control: ActiveRun) -> Outcome:
             notification_error = None
             # A failsafe stop is an issue and is always reported.
             if config.notify == "all" or complete or failsafe_reason:
-                status = "completed task" if complete else "stopped incomplete" if last_attempt or stop_requested_now or failsafe_reason else "restarting"
+                status = (
+                    "completed task" if complete else "found an existing solution" if solved_elsewhere
+                    else "stopped incomplete" if last_attempt or stop_requested_now or failsafe_reason else "restarting"
+                )
                 subject = config.subject(f"Codex {status} after run #{output['run_number']}")
                 body = (
                     f"Codex run #{output['run_number']} finished.\n\n"
@@ -233,6 +252,9 @@ def _supervise(config: RunConfig, control: ActiveRun) -> Outcome:
             # A request can also arrive while a notification is being delivered.
             output["stop_requested"] = stop_requested_now = stop_requested()
             write_json(config.workdir / "codex_last_output.json", output)
+            if solved_elsewhere:
+                print(f"An existing source already resolves the problem; see {config.workdir / RESULT_FILE}.", flush=True)
+                return Outcome(0, "solved_elsewhere")
             if complete:
                 print(f"Task complete and Lean verified. Result: {config.workdir / 'codex_last_message.md'}", flush=True)
                 return Outcome(EXIT_EMAIL_FAILED, "complete") if notification_error else Outcome(0, "complete")

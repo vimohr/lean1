@@ -8,7 +8,7 @@ lean1 checks the Lean sources and theorem dependencies declared by the agent. Th
 
 The agent is instructed to leave these files in the workspace:
 
-- `result.md`: the mathematical argument and its correspondence to named Lean theorems.
+- `result.md`: a "Prior work" section with the line `Prior resolution: NONE FOUND`, `PARTIAL`, or `COMPLETE`, followed by the mathematical argument, with every borrowed result cited, and its correspondence to named Lean theorems.
 - Lean sources and any project files needed to reproduce the proof.
 - `lean_verification.json`: the manifest used by the supervisor.
 

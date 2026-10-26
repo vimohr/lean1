@@ -163,19 +163,21 @@ def publication_prompt(
 
 def publish_solution(
     config: RunConfig, *, problem: ZooProblem, record_file: Path, review_file: Path,
-    author: Author, stop_requested: Callable[[], bool] = lambda: False,
+    author: Author, stop_requested: Callable[[], bool] = lambda: False, feedback: str = "",
 ) -> Path:
-    """Run the publication agent until the release passes `check_release`."""
+    """Run the publication agent until the release passes `check_release`.
+
+    `feedback`, such as defects found by an audit, is passed to the first attempt.
+    """
     state = config.workdir / ".lean1" / "publication"
     state.mkdir(parents=True, exist_ok=True)
     release = config.workdir / RELEASE_DIR
-    feedback = ""
     failures: list[str] = []
     for attempt in range(1, PUBLICATION_ATTEMPTS + 1):
         if not ensure_codex_healthy(config, f"publication of {problem.id}", stop_requested):
             raise StopRequested
         print(f"\n=== Publication package for {problem.id} (attempt {attempt}) ===", flush=True)
-        stem = f"publication-{attempt}"
+        stem = f"publication-{len(list(state.glob('publication-*.prompt.txt'))) + 1}"
         prompt_file = state / f"{stem}.prompt.txt"
         atomic_write(prompt_file, publication_prompt(config, problem, record_file, review_file, author, feedback))
         result = execute_codex(

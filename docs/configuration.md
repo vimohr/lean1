@@ -69,7 +69,7 @@ The failsafe exits with code `1`, preserves attempt logs and results, and record
 
 ## Codex health check
 
-Before every Codex execution (each research attempt and, with `--standard-problem`, each review and publication run), lean1 starts Codex with a minimal prompt that asks for one fixed reply. The check uses the same executable, model, sandbox, network setting, and workspace `CODEX_HOME` as the real execution. It runs in `<workdir>/.lean1/health/`, so the solution files are untouched.
+Before every Codex execution (each research attempt and, with `--standard-problem`, each review, publication, and audit run), lean1 starts Codex with a minimal prompt that asks for one fixed reply. The check uses the same executable, model, sandbox, network setting, and workspace `CODEX_HOME` as the real execution. It runs in `<workdir>/.lean1/health/`, so the solution files are untouched.
 
 A check fails if Codex cannot be started, exits with an error, exceeds `--health-check-timeout`, or gives a different reply. Authentication problems, exhausted usage limits, unavailable models, and network failures are therefore detected before a long attempt starts. A failed check is repeated `--health-check-retries` times, 30 seconds apart. If every check fails, lean1 pauses:
 
@@ -82,7 +82,7 @@ Fix the cause, then run the same command with the same `--workdir` to resume. Ea
 
 ## Issue emails
 
-lean1 always sends an email when it stops because of an issue, also with `--notify complete`. Issues are a failed health check, the rapid-failure failsafe, problem website failures, review or publication failures, and unexpected supervisor errors. Graceful stops, `Ctrl+C`, and reaching `--max-runs` or `--max-problems` are not issues. Issue emails are saved as `.lean1/notifications/issue-*.eml` before delivery.
+lean1 always sends an email when it stops because of an issue, also with `--notify complete`. Issues are a failed health check, the rapid-failure failsafe, problem website failures, review, publication, or audit failures, and unexpected supervisor errors. Graceful stops, `Ctrl+C`, and reaching `--max-runs` or `--max-problems` are not issues. Issue emails are saved as `.lean1/notifications/issue-*.eml` before delivery.
 
 ## Graceful stopping
 
@@ -141,7 +141,7 @@ lean1 removes `LEAN1_SMTP_*` variables from environments passed to Codex, Lean, 
 | `3` | The solution passed verification, but its completion email could not be delivered. |
 | `4` | The Codex health check failed; lean1 paused and sent an email. |
 | `5` | No valid unsolved problem could be obtained from the problem website. |
-| `6` | The review or publication agent failed to produce a valid result. |
+| `6` | The review, publication, or audit agent failed to produce a valid result, the auditor changed files, or the package still had defects after three audit rounds. |
 | `130` | The research command was interrupted, or gracefully stopped without a verified solution. |
 
 ## Troubleshooting

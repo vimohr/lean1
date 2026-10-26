@@ -385,8 +385,10 @@ class StandardProblemCliTests(unittest.TestCase):
         self.assertIn("Ada Lovelace", (self.root / "publish-prompt-1.txt").read_text())
         packaged = [subject for subject in self.subjects() if "Solved and packaged" in subject]
         self.assertEqual(len(packaged), 2)
-        # Health checks precede each research, review, and publication execution.
-        self.assertEqual((self.root / "health-count").read_text(), "6")
+        # Health checks precede each research, review, publication, and audit execution.
+        self.assertEqual((self.root / "health-count").read_text(), "8")
+        self.assertEqual((self.root / "audit-count").read_text(), "2")
+        self.assertTrue(all(entry["audit"] for entry in problems))
 
     def test_rejected_solution_is_retried_with_review_feedback_then_skipped(self):
         result = self.run_cli("--max-problems=1", "--max-runs=2", "--notify=complete", review="reject")
@@ -395,6 +397,40 @@ class StandardProblemCliTests(unittest.TestCase):
         self.assertIn("the website asks for every n", (self.root / "prompt-2.txt").read_text())
         self.assertFalse((self.root / "publish-count").exists())
         self.assertEqual(self.emails(), [])
+
+    def test_problem_solved_elsewhere_is_skipped_without_review(self):
+        result = self.run_cli("--max-problems=1", "--notify=complete", mode="prior-solved")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.state()[0]["status"], "solved_elsewhere")
+        self.assertEqual(len((self.root / "research-workspaces.txt").read_text().splitlines()), 1)
+        self.assertIn("Prior resolution: COMPLETE", (self.root / "prompt-1.txt").read_text())
+        self.assertFalse((self.root / "review-count").exists())
+        self.assertFalse((self.root / "publish-count").exists())
+        self.assertEqual(len(self.emails()), 1)
+        self.assertIn("Already solved elsewhere", self.subjects()[0])
+        self.assertIn("arXiv:2501.00001", self.emails()[0]["body"])
+
+    def test_audit_revisions_reach_the_publication_agent(self):
+        result = self.run_cli("--max-problems=1", "--max-runs=1", audit="revise-once")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.state()[0]["status"], "published")
+        self.assertEqual((self.root / "publish-count").read_text(), "2")
+        self.assertIn("Lemma 2 is due to Doe (2025) but is not cited.", (self.root / "publish-prompt-2.txt").read_text())
+        self.assertIn("Independent prior-work search", (self.root / "audit-prompt-1.txt").read_text())
+
+    def test_audit_finding_a_prior_solution_skips_the_problem(self):
+        result = self.run_cli("--max-problems=1", "--max-runs=1", "--notify=complete", audit="solved_elsewhere")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.state()[0]["status"], "solved_elsewhere")
+        self.assertIn("Already solved elsewhere", self.subjects()[-1])
+        self.assertIn("arXiv:2501.00001", self.emails()[-1]["body"])
+
+    def test_auditor_editing_the_release_stops_the_campaign(self):
+        result = self.run_cli("--max-problems=1", "--max-runs=1", audit="tamper")
+        self.assertEqual(result.returncode, 6, result.stdout + result.stderr)
+        self.assertEqual(self.state()[0]["status"], "accepted")
+        self.assertIn("modified the release", self.subjects()[-1])
+        self.assertIn("release/README.md", self.emails()[-1]["body"])
 
     def test_review_accepting_after_one_rejection_is_published(self):
         result = self.run_cli("--max-problems=1", "--max-runs=3", review="reject-once")
